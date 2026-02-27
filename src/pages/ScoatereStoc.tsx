@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { PackageMinus, Search, CheckCircle, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseBarcode } from "@/lib/barcode-parser";
+import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,15 +82,21 @@ export default function ScoatereStoc() {
   };
 
   const handleProductScan = () => {
-    const parsed = parseBarcode(scanInput.trim());
+    const trimmed = scanInput.trim();
+    if (!isValidBarcode(trimmed)) {
+      toast({ title: "Cod invalid", description: `Codul trebuie să aibă exact 17 cifre numerice (primit: ${trimmed.length})`, variant: "destructive" });
+      setScanInput("");
+      return;
+    }
+    const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
       const product = products.find(p => p.base_id === parsed.baseId);
       if (product) {
         setSelectedProduct(product);
-        setVariantCode(parsed.variantCode || "");
+        setVariantCode("");
         setStep("confirm");
       } else {
-        toast({ title: "Produs negăsit", variant: "destructive" });
+        toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId}`, variant: "destructive" });
       }
     }
     setScanInput("");
@@ -219,7 +225,7 @@ export default function ScoatereStoc() {
           <CardContent className="space-y-4">
             <div className="rounded-lg bg-muted p-3">
               <p className="font-medium">{selectedProduct.name}</p>
-              <p className="text-xs text-muted-foreground">Cod: {selectedProduct.base_id} {variantCode && `• Variantă: ${variantCode}`}</p>
+              <p className="text-xs text-muted-foreground">Cod: {selectedProduct.base_id}</p>
               <p className="text-xs text-muted-foreground">Stoc curent: {selectedProduct.stock_general}</p>
             </div>
             <div>
