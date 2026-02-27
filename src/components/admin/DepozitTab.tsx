@@ -40,13 +40,6 @@ export default function DepozitTab() {
     },
   });
 
-  const depozitProducts = products.filter(
-    (p: any) => p.stock_depozit > 0 || searchTerm
-      ? p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.base_id.toLowerCase().includes(searchTerm.toLowerCase())
-      : false
-  );
-
   const allDepozitProducts = products.filter((p: any) => p.stock_depozit > 0);
 
   return (

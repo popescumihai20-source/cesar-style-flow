@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -71,6 +71,47 @@ export default function Admin() {
       setFiscalInput("");
     },
     onError: (err: any) => toast({ title: "Eroare", description: err.message, variant: "destructive" }),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (saleId: string) => {
+      // Fetch sale items to restore stock
+      const { data: items, error: itemsErr } = await supabase
+        .from("sale_items")
+        .select("product_id, quantity")
+        .eq("sale_id", saleId);
+      if (itemsErr) throw itemsErr;
+
+      // Restore stock for each item
+      for (const item of (items || [])) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock_general")
+          .eq("id", item.product_id)
+          .single();
+        if (product) {
+          await supabase
+            .from("products")
+            .update({ stock_general: product.stock_general + item.quantity })
+            .eq("id", item.product_id);
+        }
+      }
+
+      // Mark sale as cancelled
+      const { error } = await supabase
+        .from("sales")
+        .update({ status: "anulat" as const })
+        .eq("id", saleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["products-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["products-pos"] });
+      toast({ title: "Vânzare anulată", description: "Stocul a fost restaurat" });
+      setSelectedSale(null);
+    },
+    onError: (err: any) => toast({ title: "Eroare la anulare", description: err.message, variant: "destructive" }),
   });
 
   const now = new Date();
@@ -342,6 +383,22 @@ export default function Admin() {
               {selectedSale.fiscal_receipt_number && (
                 <div className="border-t border-border pt-3">
                   <p className="text-sm"><span className="text-muted-foreground">Bon fiscal:</span> <span className="font-mono font-medium">{selectedSale.fiscal_receipt_number}</span></p>
+                </div>
+              )}
+
+              {/* Cancel sale button */}
+              {selectedSale.status !== "anulat" && (
+                <div className="border-t border-border pt-3">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => cancelMutation.mutate(selectedSale.id)}
+                    disabled={cancelMutation.isPending}
+                  >
+                    <Ban className="h-4 w-4 mr-1" />
+                    {cancelMutation.isPending ? "Se anulează..." : "Anulare Vânzare + Restituie Stoc"}
+                  </Button>
                 </div>
               )}
             </div>
