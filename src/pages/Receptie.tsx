@@ -5,19 +5,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { generateBarcode } from "@/lib/barcode-parser";
 import { BarcodePreview } from "@/components/receptie/BarcodePreview";
+import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
+import { useProducatorDictionary } from "@/hooks/use-producator-dictionary";
+import { useColorDictionary } from "@/hooks/use-color-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReceiptRow {
   id: string;
-  articol: string;
-  model: string;
-  producator: string;
+  articolCode: string;   // 2-digit code from dictionary
+  modelCode: string;     // 2-digit code from color dictionary
+  producatorCode: string; // 2-digit code from dictionary
   dataReceptie: string;
   sellingPrice: number;
   costPrice: number;
@@ -27,11 +31,10 @@ function buildBaseId(articol: string, model: string, producator: string): string
   const a = articol.padStart(2, "0").substring(0, 2);
   const m = model.padStart(2, "0").substring(0, 2);
   const p = producator.padStart(2, "0").substring(0, 2);
-  return a + m + p + "0"; // 7 digits: articol(2)+model/culoare(2)+producator(2)+flag(1)
+  return a + m + p + "0"; // 7 digits
 }
 
 function parseDateFromField(dateStr: string): Date | null {
-  // Accept DD/MM/YYYY or DDMMYYYY or DDMMYY
   const cleaned = dateStr.replace(/[\/\-\.]/g, "");
   if (cleaned.length === 8) {
     const d = parseInt(cleaned.substring(0, 2));
@@ -55,26 +58,37 @@ export default function Receptie() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { activeEntries: articolEntries } = useArticolDictionary();
+  const { activeProducatori } = useProducatorDictionary();
+  const { activeColors } = useColorDictionary();
+
   const addRow = useCallback(() => {
     setRows(prev => [...prev, {
       id: crypto.randomUUID(),
-      articol: "", model: "", producator: "",
+      articolCode: "", modelCode: "", producatorCode: "",
       dataReceptie: "", sellingPrice: 0, costPrice: 0,
     }]);
   }, []);
 
   const handleExcelImport = useCallback((excelRows: ExcelRow[]) => {
-    const newRows: ReceiptRow[] = excelRows.map(er => ({
-      id: crypto.randomUUID(),
-      articol: er.articol,
-      model: er.model,
-      producator: er.producator,
-      dataReceptie: er.data,
-      sellingPrice: er.pretVanzare,
-      costPrice: er.pretAchizitie,
-    }));
+    const newRows: ReceiptRow[] = excelRows.map(er => {
+      // Try to match articol by code or name
+      const artMatch = articolEntries.find(a => a.code === er.articol || a.name.toLowerCase() === er.articol.toLowerCase());
+      const prodMatch = activeProducatori.find(p => p.code === er.producator || p.name.toLowerCase() === er.producator.toLowerCase());
+      const colorMatch = activeColors.find(c => c.code === er.model || c.name.toLowerCase() === er.model.toLowerCase());
+
+      return {
+        id: crypto.randomUUID(),
+        articolCode: artMatch?.code || er.articol,
+        modelCode: colorMatch?.code || er.model,
+        producatorCode: prodMatch?.code || er.producator,
+        dataReceptie: er.data,
+        sellingPrice: er.pretVanzare,
+        costPrice: er.pretAchizitie,
+      };
+    });
     setRows(prev => [...prev, ...newRows]);
-  }, []);
+  }, [articolEntries, activeProducatori, activeColors]);
 
   const removeRow = useCallback((id: string) => {
     setRows(prev => prev.filter(r => r.id !== id));
@@ -85,14 +99,13 @@ export default function Receptie() {
   }, []);
 
   const handleSubmit = async () => {
-    const validRows = rows.filter(r => r.articol && r.producator);
+    const validRows = rows.filter(r => r.articolCode && r.producatorCode && r.modelCode);
     if (validRows.length === 0) {
-      toast({ title: "Completează cel puțin articol și producător", variant: "destructive" });
+      toast({ title: "Selectează articol, model și producător pentru cel puțin un rând", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
     try {
-      // Create receipt
       const { data: receipt, error: receiptError } = await supabase
         .from("stock_receipts")
         .insert({ notes: notes || null })
@@ -101,11 +114,9 @@ export default function Receptie() {
       if (receiptError) throw receiptError;
 
       for (const row of validRows) {
-        const baseId = buildBaseId(row.articol, row.model, row.producator);
+        const baseId = buildBaseId(row.articolCode, row.modelCode, row.producatorCode);
         const entryDate = parseDateFromField(row.dataReceptie) || new Date();
-        const barcode = generateBarcode(baseId, null, entryDate, Math.round(row.sellingPrice));
 
-        // Check if product exists by base_id
         const { data: existing } = await supabase
           .from("products")
           .select("id, stock_general")
@@ -115,7 +126,6 @@ export default function Receptie() {
         let productId: string;
 
         if (existing) {
-          // Update stock
           await supabase.from("products").update({
             stock_general: existing.stock_general + 1,
             cost_price: row.costPrice,
@@ -125,12 +135,15 @@ export default function Receptie() {
           }).eq("id", existing.id);
           productId = existing.id;
         } else {
-          // Create new product
+          const artName = articolEntries.find(a => a.code === row.articolCode)?.name || row.articolCode;
+          const colorName = activeColors.find(c => c.code === row.modelCode)?.name || row.modelCode;
+          const prodName = activeProducatori.find(p => p.code === row.producatorCode)?.name || row.producatorCode;
+
           const { data: newProduct, error: prodErr } = await supabase
             .from("products")
             .insert({
               base_id: baseId,
-              name: `${row.articol}-${row.model}-${row.producator}`,
+              name: `${artName} ${colorName} ${prodName}`,
               cost_price: row.costPrice,
               selling_price: row.sellingPrice,
               stock_general: 1,
@@ -143,7 +156,6 @@ export default function Receptie() {
           productId = newProduct.id;
         }
 
-        // Create receipt item
         await supabase.from("stock_receipt_items").insert({
           receipt_id: receipt.id,
           product_id: productId,
@@ -171,7 +183,7 @@ export default function Receptie() {
           <Truck className="h-7 w-7 text-primary" />
           <div>
             <h1 className="text-xl font-bold">Recepție Marfă</h1>
-            <p className="text-xs text-muted-foreground">Adaugă produse în stoc — codul de bare se generează automat</p>
+            <p className="text-xs text-muted-foreground">Selectează din dicționare — codul de bare (17 cifre) se generează automat</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -188,38 +200,65 @@ export default function Receptie() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Articol (2 cifre)</TableHead>
-                <TableHead>Model / Culoare (2 cifre)</TableHead>
-                <TableHead>Producător (2 cifre)</TableHead>
-                <TableHead>Data (ZZ/LL/AAAA)</TableHead>
+                <TableHead className="w-40">Articol</TableHead>
+                <TableHead className="w-40">Model / Culoare</TableHead>
+                <TableHead className="w-40">Producător</TableHead>
+                <TableHead className="w-28">Data</TableHead>
                 <TableHead className="text-right w-28">Preț Vânzare</TableHead>
                 <TableHead className="text-right w-28">Preț Achiziție</TableHead>
-                <TableHead className="w-20">Cod Bare</TableHead>
+                <TableHead className="w-36">Cod Bare</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map(row => {
-                const canGenerate = row.articol.length >= 2 && row.model.length >= 2 && row.producator.length >= 2;
+                const canGenerate = /^\d{2}$/.test(row.articolCode) && /^\d{2}$/.test(row.modelCode) && /^\d{2}$/.test(row.producatorCode);
                 const generatedBarcode = canGenerate
                   ? generateBarcode(
-                      buildBaseId(row.articol, row.model, row.producator),
+                      buildBaseId(row.articolCode, row.modelCode, row.producatorCode),
                       null,
                       parseDateFromField(row.dataReceptie) || new Date(),
                       Math.round(row.sellingPrice)
                     )
-                  : "—";
+                  : "";
 
                 return (
                   <TableRow key={row.id}>
                     <TableCell>
-                      <Input value={row.articol} onChange={e => updateRow(row.id, { articol: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                      <Select value={row.articolCode} onValueChange={v => updateRow(row.id, { articolCode: v })}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Articol..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {articolEntries.map(a => (
+                            <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
-                      <Input value={row.model} onChange={e => updateRow(row.id, { model: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                      <Select value={row.modelCode} onValueChange={v => updateRow(row.id, { modelCode: v })}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Culoare..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeColors.map(c => (
+                            <SelectItem key={c.id} value={c.code}>{c.code} — {c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
-                      <Input value={row.producator} onChange={e => updateRow(row.id, { producator: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                      <Select value={row.producatorCode} onValueChange={v => updateRow(row.id, { producatorCode: v })}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Producător..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeProducatori.map(p => (
+                            <SelectItem key={p.id} value={p.code}>{p.code} — {p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       <Input value={row.dataReceptie} onChange={e => updateRow(row.id, { dataReceptie: e.target.value })} className="h-8 w-28 text-xs" placeholder="27/02/2026" />
