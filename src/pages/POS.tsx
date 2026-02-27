@@ -61,15 +61,12 @@ export default function POS() {
       )
     : [];
 
-  // Auto-focus scan input
+  // Auto-focus scan input only on initial mount
   useEffect(() => {
-    const focusTimer = setInterval(() => {
-      if (scanInputRef.current && document.activeElement !== scanInputRef.current && !showSearch && !showFinalize) {
-        scanInputRef.current.focus();
-      }
-    }, 500);
-    return () => clearInterval(focusTimer);
-  }, [showSearch, showFinalize]);
+    if (scanInputRef.current) {
+      scanInputRef.current.focus();
+    }
+  }, []);
 
   // Handle scan input (card or product barcode)
   const handleScan = useCallback(async (value: string) => {
