@@ -57,10 +57,16 @@ export default function ScoatereStoc() {
   };
 
   const handleCard = async () => {
+    const trimmed = cardInput.trim();
+    if (!/^\d{7}$/.test(trimmed)) {
+      toast({ title: "Cod card invalid", description: "Trebuie exact 7 cifre numerice", variant: "destructive" });
+      setCardInput("");
+      return;
+    }
     const { data: emp } = await supabase
       .from("employees")
       .select("*")
-      .eq("employee_card_code", cardInput.trim())
+      .eq("employee_card_code", trimmed)
       .eq("active", true)
       .maybeSingle();
     if (emp) {
@@ -73,10 +79,15 @@ export default function ScoatereStoc() {
   };
 
   const handlePin = () => {
+    if (!/^\d{4}$/.test(pinInput)) {
+      toast({ title: "PIN invalid", description: "Trebuie exact 4 cifre", variant: "destructive" });
+      setPinInput("");
+      return;
+    }
     if (employee && pinInput === employee.removal_pin) {
       setStep("product");
     } else {
-      toast({ title: "PIN incorect", variant: "destructive" });
+      toast({ title: "PIN scoatere incorect", variant: "destructive" });
     }
     setPinInput("");
   };
@@ -192,7 +203,7 @@ export default function ScoatereStoc() {
               placeholder="PIN..."
               className="h-14 text-lg text-center tracking-widest"
               autoFocus
-              maxLength={6}
+              maxLength={4}
             />
           </CardContent>
         </Card>

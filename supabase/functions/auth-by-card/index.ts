@@ -11,11 +11,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { card_code } = await req.json();
+    const { card_code, pin_login } = await req.json();
 
-    if (!card_code || typeof card_code !== "string") {
+    if (!card_code || typeof card_code !== "string" || !/^\d{7}$/.test(card_code)) {
       return new Response(
-        JSON.stringify({ error: "Cod card lipsă" }),
+        JSON.stringify({ error: "Cod card invalid — trebuie exact 7 cifre" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!pin_login || typeof pin_login !== "string" || !/^\d{4}$/.test(pin_login)) {
+      return new Response(
+        JSON.stringify({ error: "PIN invalid — trebuie exact 4 cifre" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -24,7 +31,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error("Missing env vars:", { hasUrl: !!supabaseUrl, hasKey: !!serviceRoleKey });
       return new Response(
         JSON.stringify({ error: "Configurare server lipsă" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -52,13 +58,20 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Validate pin_login
+    if (!employee.pin_login || employee.pin_login !== pin_login) {
+      return new Response(
+        JSON.stringify({ error: "PIN incorect" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const email = `emp_${card_code.trim()}@cesars.internal`;
     const password = `cesars_pos_${card_code.trim()}_secure`;
 
     let userId = employee.user_id;
 
     if (!userId) {
-      // Create auth user for this employee
       const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -67,7 +80,6 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
-        // User might already exist
         const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = listData?.users?.find((u: any) => u.email === email);
         if (existingUser) {
@@ -79,79 +91,35 @@ Deno.serve(async (req) => {
         userId = createData.user.id;
       }
 
-      // Link user_id to employee
       await supabaseAdmin
         .from("employees")
         .update({ user_id: userId })
         .eq("id", employee.id);
 
-      // Assign casier role by default
+      // Assign role based on card prefix
+      const defaultRole = card_code.startsWith("9") ? "admin" : "casier";
       await supabaseAdmin
         .from("user_roles")
-        .upsert({ user_id: userId, role: "casier" }, { onConflict: "user_id,role" });
+        .upsert({ user_id: userId, role: defaultRole }, { onConflict: "user_id,role" });
     }
 
-    // Sign in - use service role client to sign in on behalf of user
-    // First ensure password is set correctly
+    // Sign in
     await supabaseAdmin.auth.admin.updateUserById(userId!, { password });
 
-    // Create a new anon client for sign-in using the service role key to get anon key
-    // Actually, we can use signInWithPassword via admin client workaround:
-    // Use a fresh client with the anon key
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-    
-    if (!anonKey) {
-      // Fallback: generate session directly via admin
-      const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-      });
-      
-      if (sessionError) throw sessionError;
-
-      // Use admin to create a session directly
-      // Sign in with password using the admin client's underlying fetch
-      const signInResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": serviceRoleKey,
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const signInData = await signInResponse.json();
-
-      if (!signInResponse.ok) {
-        throw new Error(signInData.error_description || signInData.msg || "Sign in failed");
-      }
-
-      // Fetch roles
-      const { data: roles } = await supabaseAdmin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-
-      return new Response(
-        JSON.stringify({
-          session: {
-            access_token: signInData.access_token,
-            refresh_token: signInData.refresh_token,
-          },
-          employee: { id: employee.id, name: employee.name },
-          roles: (roles || []).map((r: any) => r.role),
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseAnon = createClient(supabaseUrl, anonKey);
-    const { data: signInData, error: signInError } = await supabaseAnon.auth.signInWithPassword({
-      email,
-      password,
+    const signInResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceRoleKey,
+      },
+      body: JSON.stringify({ email, password }),
     });
 
-    if (signInError) throw signInError;
+    const signInData = await signInResponse.json();
+
+    if (!signInResponse.ok) {
+      throw new Error(signInData.error_description || signInData.msg || "Sign in failed");
+    }
 
     // Fetch roles
     const { data: roles } = await supabaseAdmin
@@ -161,7 +129,10 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        session: signInData.session,
+        session: {
+          access_token: signInData.access_token,
+          refresh_token: signInData.refresh_token,
+        },
         employee: { id: employee.id, name: employee.name },
         roles: (roles || []).map((r: any) => r.role),
       }),
