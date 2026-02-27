@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Package, Plus, Search, Filter, Edit, Trash2, Eye, ChevronDown } from "lucide-react";
+import { Package, Plus, Search, Filter, Edit, Trash2, Eye, ChevronDown, Store, Warehouse } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Product } from "@/types/pos";
 import { Button } from "@/components/ui/button";
@@ -146,6 +147,16 @@ export default function Produse() {
         </div>
       </div>
 
+      {/* Gestiuni Tabs */}
+      <Tabs defaultValue="magazin" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="magazin" className="gap-1.5"><Store className="h-3.5 w-3.5" />Magazin Ferdinand</TabsTrigger>
+          <TabsTrigger value="depozit" className="gap-1.5"><Warehouse className="h-3.5 w-3.5" />Depozit</TabsTrigger>
+        </TabsList>
+
+        {/* Magazin Ferdinand */}
+        <TabsContent value="magazin" className="space-y-4">
+
       {/* Filters */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
@@ -222,6 +233,52 @@ export default function Produse() {
           </Table>
         </div>
       </Card>
+        </TabsContent>
+
+        {/* Depozit */}
+        <TabsContent value="depozit" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Stoc Depozit</CardTitle>
+                <div className="relative min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Caută produs..." className="pl-9 h-9" />
+                </div>
+              </div>
+            </CardHeader>
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cod</TableHead>
+                    <TableHead>Nume</TableHead>
+                    <TableHead>Categorie</TableHead>
+                    <TableHead className="text-right">Stoc Depozit</TableHead>
+                    <TableHead className="text-right">Stoc Magazin</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.filter((p: any) => {
+                    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search)) return false;
+                    return p.active;
+                  }).map((p: any) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>{p.category || "—"}</TableCell>
+                      <TableCell className={`text-right font-mono font-bold ${(p as any).stock_depozit > 0 ? "" : "text-muted-foreground"}`}>{(p as any).stock_depozit ?? 0}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
+                      <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create/Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
