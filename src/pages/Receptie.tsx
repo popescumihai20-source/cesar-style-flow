@@ -1,81 +1,76 @@
 import { useState, useCallback } from "react";
-import { Truck, Plus, Trash2, Search, Save, CheckCircle, Camera } from "lucide-react";
+import { Truck, Plus, Trash2, CheckCircle } from "lucide-react";
 import { ExcelImport, type ExcelRow } from "@/components/receptie/ExcelImport";
-import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parseBarcode } from "@/lib/barcode-parser";
-import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
+import { useQueryClient } from "@tanstack/react-query";
+import { generateBarcode } from "@/lib/barcode-parser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReceiptRow {
   id: string;
-  productId: string | null;
-  productName: string;
-  baseId: string;
-  variantCode: string;
-  quantity: number;
-  costPrice: number;
-  sellingPrice: number;
   articol: string;
   model: string;
   producator: string;
   dataReceptie: string;
+  sellingPrice: number;
+  costPrice: number;
+}
+
+function buildBaseId(articol: string, model: string, producator: string): string {
+  const a = articol.padStart(2, "0").substring(0, 2);
+  const m = model.padStart(2, "0").substring(0, 2);
+  const p = producator.padStart(2, "0").substring(0, 2);
+  return a + m + p + "0"; // 7 digits: articol(2)+model/culoare(2)+producator(2)+flag(1)
+}
+
+function parseDateFromField(dateStr: string): Date | null {
+  // Accept DD/MM/YYYY or DDMMYYYY or DDMMYY
+  const cleaned = dateStr.replace(/[\/\-\.]/g, "");
+  if (cleaned.length === 8) {
+    const d = parseInt(cleaned.substring(0, 2));
+    const m = parseInt(cleaned.substring(2, 4)) - 1;
+    const y = parseInt(cleaned.substring(4, 8));
+    return new Date(y, m, d);
+  }
+  if (cleaned.length === 6) {
+    const d = parseInt(cleaned.substring(0, 2));
+    const m = parseInt(cleaned.substring(2, 4)) - 1;
+    const y = 2000 + parseInt(cleaned.substring(4, 6));
+    return new Date(y, m, d);
+  }
+  return null;
 }
 
 export default function Receptie() {
   const [rows, setRows] = useState<ReceiptRow[]>([]);
   const [notes, setNotes] = useState("");
-  const [scanInput, setScanInput] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchRowId, setSearchRowId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [scannerRowId, setScannerRowId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { getArticolLabel } = useArticolDictionary();
-
-  const { data: products = [] } = useQuery({
-    queryKey: ["products-pos"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").eq("active", true).order("name");
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
 
   const addRow = useCallback(() => {
     setRows(prev => [...prev, {
       id: crypto.randomUUID(),
-      productId: null, productName: "", baseId: "",
-      variantCode: "", quantity: 1, costPrice: 0, sellingPrice: 0,
-      articol: "", model: "", producator: "", dataReceptie: "",
+      articol: "", model: "", producator: "",
+      dataReceptie: "", sellingPrice: 0, costPrice: 0,
     }]);
   }, []);
 
   const handleExcelImport = useCallback((excelRows: ExcelRow[]) => {
     const newRows: ReceiptRow[] = excelRows.map(er => ({
       id: crypto.randomUUID(),
-      productId: null,
-      productName: `${er.model}`,
-      baseId: "",
-      variantCode: er.articol,
-      quantity: 1,
-      costPrice: er.pretAchizitie,
-      sellingPrice: er.pretVanzare,
       articol: er.articol,
       model: er.model,
       producator: er.producator,
       dataReceptie: er.data,
+      sellingPrice: er.pretVanzare,
+      costPrice: er.pretAchizitie,
     }));
     setRows(prev => [...prev, ...newRows]);
   }, []);
@@ -88,53 +83,10 @@ export default function Receptie() {
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
   }, []);
 
-  const handleBarcodeScan = useCallback((rowId: string, barcode: string) => {
-    const parsed = parseBarcode(barcode.trim());
-    if (!parsed.isValid) {
-      toast({ title: "Cod invalid", description: parsed.error, variant: "destructive" });
-      return;
-    }
-    const product = products.find(p => p.base_id === parsed.baseId);
-    if (product) {
-      updateRow(rowId, {
-        productId: product.id,
-        productName: product.name,
-        baseId: product.base_id,
-        variantCode: parsed.variantCode || "",
-        costPrice: product.cost_price,
-      });
-    } else {
-      updateRow(rowId, { baseId: parsed.baseId, variantCode: parsed.variantCode || "" });
-      toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId} — selectează manual`, variant: "destructive" });
-    }
-  }, [products, updateRow, toast]);
-
-  const openSearchForRow = (rowId: string) => {
-    setSearchRowId(rowId);
-    setSearchQuery("");
-    setShowSearch(true);
-  };
-
-  const selectProductForRow = (product: any) => {
-    if (searchRowId) {
-      updateRow(searchRowId, {
-        productId: product.id,
-        productName: product.name,
-        baseId: product.base_id,
-        costPrice: product.cost_price,
-      });
-    }
-    setShowSearch(false);
-  };
-
-  const filteredProducts = searchQuery.length >= 2
-    ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.base_id.includes(searchQuery))
-    : [];
-
   const handleSubmit = async () => {
-    const validRows = rows.filter(r => r.productId && r.quantity > 0);
+    const validRows = rows.filter(r => r.articol && r.producator);
     if (validRows.length === 0) {
-      toast({ title: "Adaugă cel puțin un produs valid", variant: "destructive" });
+      toast({ title: "Completează cel puțin articol și producător", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -147,42 +99,56 @@ export default function Receptie() {
         .single();
       if (receiptError) throw receiptError;
 
-      // Create receipt items
-      const items = validRows.map(r => ({
-        receipt_id: receipt.id,
-        product_id: r.productId!,
-        variant_code: r.variantCode || null,
-        quantity: r.quantity,
-        cost_price: r.costPrice,
-      }));
-      const { error: itemsError } = await supabase.from("stock_receipt_items").insert(items);
-      if (itemsError) throw itemsError;
-
-      // Update stock for each product
       for (const row of validRows) {
-        const product = products.find(p => p.id === row.productId);
-        if (product) {
+        const baseId = buildBaseId(row.articol, row.model, row.producator);
+        const entryDate = parseDateFromField(row.dataReceptie) || new Date();
+        const barcode = generateBarcode(baseId, null, entryDate, Math.round(row.sellingPrice));
+
+        // Check if product exists by base_id
+        const { data: existing } = await supabase
+          .from("products")
+          .select("id, stock_general")
+          .eq("base_id", baseId)
+          .maybeSingle();
+
+        let productId: string;
+
+        if (existing) {
+          // Update stock
           await supabase.from("products").update({
-            stock_general: product.stock_general + row.quantity,
+            stock_general: existing.stock_general + 1,
+            cost_price: row.costPrice,
+            selling_price: row.sellingPrice,
             last_received_at: new Date().toISOString(),
             active: true,
-          }).eq("id", product.id);
-
-          // Update variant stock if applicable
-          if (row.variantCode) {
-            const { data: variant } = await supabase
-              .from("product_variants")
-              .select("*")
-              .eq("product_id", product.id)
-              .eq("variant_code", row.variantCode)
-              .single();
-            if (variant) {
-              await supabase.from("product_variants")
-                .update({ stock_variant: variant.stock_variant + row.quantity })
-                .eq("id", variant.id);
-            }
-          }
+          }).eq("id", existing.id);
+          productId = existing.id;
+        } else {
+          // Create new product
+          const { data: newProduct, error: prodErr } = await supabase
+            .from("products")
+            .insert({
+              base_id: baseId,
+              name: `${row.articol}-${row.model}-${row.producator}`,
+              cost_price: row.costPrice,
+              selling_price: row.sellingPrice,
+              stock_general: 1,
+              active: true,
+              last_received_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+          if (prodErr) throw prodErr;
+          productId = newProduct.id;
         }
+
+        // Create receipt item
+        await supabase.from("stock_receipt_items").insert({
+          receipt_id: receipt.id,
+          product_id: productId,
+          quantity: 1,
+          cost_price: row.costPrice,
+        });
       }
 
       queryClient.invalidateQueries({ queryKey: ["products-pos"] });
@@ -204,7 +170,7 @@ export default function Receptie() {
           <Truck className="h-7 w-7 text-primary" />
           <div>
             <h1 className="text-xl font-bold">Recepție Marfă</h1>
-            <p className="text-xs text-muted-foreground">Adaugă produse în stoc</p>
+            <p className="text-xs text-muted-foreground">Adaugă produse în stoc — codul de bare se generează automat</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -221,70 +187,62 @@ export default function Receptie() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[200px]">Cod de bare / Produs</TableHead>
-                <TableHead>Articol</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Producător</TableHead>
-                <TableHead>Data</TableHead>
+                <TableHead>Articol (2 cifre)</TableHead>
+                <TableHead>Model / Culoare (2 cifre)</TableHead>
+                <TableHead>Producător (2 cifre)</TableHead>
+                <TableHead>Data (ZZ/LL/AAAA)</TableHead>
                 <TableHead className="text-right w-28">Preț Vânzare</TableHead>
                 <TableHead className="text-right w-28">Preț Achiziție</TableHead>
-                <TableHead className="text-right w-20">Cant.</TableHead>
+                <TableHead className="w-20">Cod Bare</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(row => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Input
-                        placeholder="Scanează cod..."
-                        className="h-8 text-xs font-mono"
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            handleBarcodeScan(row.id, (e.target as HTMLInputElement).value);
-                          }
-                        }}
-                      />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => openSearchForRow(row.id)}>
-                        <Search className="h-3 w-3" />
+              {rows.map(row => {
+                const canGenerate = row.articol.length >= 2 && row.model.length >= 2 && row.producator.length >= 2;
+                const generatedBarcode = canGenerate
+                  ? generateBarcode(
+                      buildBaseId(row.articol, row.model, row.producator),
+                      null,
+                      parseDateFromField(row.dataReceptie) || new Date(),
+                      Math.round(row.sellingPrice)
+                    )
+                  : "—";
+
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <Input value={row.articol} onChange={e => updateRow(row.id, { articol: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                    </TableCell>
+                    <TableCell>
+                      <Input value={row.model} onChange={e => updateRow(row.id, { model: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                    </TableCell>
+                    <TableCell>
+                      <Input value={row.producator} onChange={e => updateRow(row.id, { producator: e.target.value })} className="h-8 text-xs w-20 font-mono" placeholder="01" maxLength={2} />
+                    </TableCell>
+                    <TableCell>
+                      <Input value={row.dataReceptie} onChange={e => updateRow(row.id, { dataReceptie: e.target.value })} className="h-8 w-28 text-xs" placeholder="27/02/2026" />
+                    </TableCell>
+                    <TableCell>
+                      <Input type="number" value={row.sellingPrice} onChange={e => updateRow(row.id, { sellingPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
+                    </TableCell>
+                    <TableCell>
+                      <Input type="number" value={row.costPrice} onChange={e => updateRow(row.id, { costPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs font-mono text-muted-foreground">{generatedBarcode}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeRow(row.id)}>
+                        <Trash2 className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setScannerRowId(row.id)}>
-                        <Camera className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Input value={row.articol} onChange={e => updateRow(row.id, { articol: e.target.value })} className="h-8 text-xs" placeholder="Articol" />
-                  </TableCell>
-                  <TableCell>
-                    <Input value={row.model} onChange={e => updateRow(row.id, { model: e.target.value, productName: e.target.value })} className="h-8 text-xs" placeholder="Model" />
-                  </TableCell>
-                  <TableCell>
-                    <Input value={row.producator} onChange={e => updateRow(row.id, { producator: e.target.value })} className="h-8 text-xs" placeholder="Producător" />
-                  </TableCell>
-                  <TableCell>
-                    <Input value={row.dataReceptie} onChange={e => updateRow(row.id, { dataReceptie: e.target.value })} className="h-8 w-28 text-xs" placeholder="ZZ/LL/AAAA" />
-                  </TableCell>
-                  <TableCell>
-                    <Input type="number" value={row.sellingPrice} onChange={e => updateRow(row.id, { sellingPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
-                  </TableCell>
-                  <TableCell>
-                    <Input type="number" value={row.costPrice} onChange={e => updateRow(row.id, { costPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
-                  </TableCell>
-                  <TableCell>
-                    <Input type="number" value={row.quantity} onChange={e => updateRow(row.id, { quantity: parseInt(e.target.value) || 0 })} className="h-8 w-16 text-right text-sm" />
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeRow(row.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     Importă un fișier Excel sau apasă "Adaugă Rând" pentru a începe recepția
                   </TableCell>
                 </TableRow>
@@ -300,32 +258,6 @@ export default function Receptie() {
           <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observații, furnizor, nr. factură..." className="mt-1" />
         </CardContent>
       </Card>
-
-      {/* Search dialog */}
-      <Dialog open={showSearch} onOpenChange={setShowSearch}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Selectează produs</DialogTitle></DialogHeader>
-          <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Caută produs..." autoFocus />
-          <div className="max-h-80 overflow-auto space-y-1">
-            {filteredProducts.map(p => (
-              <button key={p.id} className="w-full flex justify-between p-3 rounded-lg hover:bg-muted text-left" onClick={() => selectProductForRow(p)}>
-                <div><p className="font-medium">{p.name}</p><p className="text-xs text-muted-foreground">{p.base_id}</p></div>
-                <div className="text-right text-sm"><p className="font-mono">{p.cost_price.toFixed(2)} RON</p><p className="text-xs text-muted-foreground">Stoc: {p.stock_general}</p></div>
-              </button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Camera scanner */}
-      <BarcodeScanner
-        open={!!scannerRowId}
-        onClose={() => setScannerRowId(null)}
-        onScan={(barcode) => {
-          if (scannerRowId) {
-            handleBarcodeScan(scannerRowId, barcode);
-          }
-        }}
-      />
     </div>
   );
 }
