@@ -40,7 +40,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/receptie" element={
-                <ProtectedRoute allowedRoles={["admin", "depozit"]}>
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <Receptie />
                 </ProtectedRoute>
               } />
