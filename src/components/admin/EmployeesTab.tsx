@@ -25,15 +25,6 @@ function generateRandomPin(): string {
   return pin;
 }
 
-function generatePinPair(): { pinLogin: string; pinStock: string } {
-  const pinLogin = generateRandomPin();
-  let pinStock: string;
-  do {
-    pinStock = generateRandomPin();
-  } while (pinStock === pinLogin);
-  return { pinLogin, pinStock };
-}
-
 function validatePin(pin: string, label: string): string | null {
   if (!/^\d{4}$/.test(pin)) return `${label} trebuie să fie exact 4 cifre`;
   if (WEAK_PINS.includes(pin)) return `${label} este prea slab`;
@@ -45,7 +36,6 @@ interface CreatedCredentials {
   role: string;
   cardCode: string;
   pinLogin: string;
-  pinStock: string;
 }
 
 export default function EmployeesTab() {
@@ -58,7 +48,6 @@ export default function EmployeesTab() {
     name: "",
     role: "casier" as EmployeeRole,
     pin_login: "",
-    removal_pin: "",
     active: true,
   });
 
@@ -86,17 +75,11 @@ export default function EmployeesTab() {
     mutationFn: async (data: typeof form) => {
       const errLogin = validatePin(data.pin_login, "PIN Login");
       if (errLogin) throw new Error(errLogin);
-      const errStock = validatePin(data.removal_pin, "PIN Scoatere");
-      if (errStock) throw new Error(errStock);
-      if (data.pin_login === data.removal_pin) {
-        throw new Error("PIN Login și PIN Scoatere trebuie să fie diferite");
-      }
 
       if (editingId) {
         const { error } = await supabase.from("employees").update({
           name: data.name,
           pin_login: data.pin_login,
-          removal_pin: data.removal_pin,
           active: data.active,
         }).eq("id", editingId);
         if (error) throw error;
@@ -108,7 +91,7 @@ export default function EmployeesTab() {
           employee_card_code: cardCode,
           role: data.role,
           pin_login: data.pin_login,
-          removal_pin: data.removal_pin,
+          removal_pin: generateRandomPin(), // kept for DB constraint, but unused
           active: data.active,
         });
         if (error) throw error;
@@ -119,27 +102,15 @@ export default function EmployeesTab() {
       queryClient.invalidateQueries({ queryKey: ["admin-employees"] });
       setShowForm(false);
 
-      if (result.isEdit) {
-        // Show credentials modal for edited employee too (new pins)
-        setCreatedCreds({
-          name: form.name,
-          role: form.role,
-          cardCode: employees.find(e => e.id === editingId)?.employee_card_code || "",
-          pinLogin: form.pin_login,
-          pinStock: form.removal_pin,
-        });
-        toast.success("Angajat actualizat — PIN-uri noi generate");
-      } else {
-        // Show secure credentials modal
-        setCreatedCreds({
-          name: form.name,
-          role: form.role,
-          cardCode: result.cardCode,
-          pinLogin: form.pin_login,
-          pinStock: form.removal_pin,
-        });
-        toast.success("Angajat creat cu succes");
-      }
+      setCreatedCreds({
+        name: form.name,
+        role: form.role,
+        cardCode: result.isEdit
+          ? (employees.find(e => e.id === editingId)?.employee_card_code || "")
+          : result.cardCode,
+        pinLogin: form.pin_login,
+      });
+      toast.success(result.isEdit ? "Angajat actualizat" : "Angajat creat cu succes");
       setEditingId(null);
     },
     onError: (err: any) => toast.error(err.message),
@@ -158,33 +129,25 @@ export default function EmployeesTab() {
   });
 
   const openCreate = () => {
-    const { pinLogin, pinStock } = generatePinPair();
     setEditingId(null);
-    setForm({ name: "", role: "casier", pin_login: pinLogin, removal_pin: pinStock, active: true });
+    setForm({ name: "", role: "casier", pin_login: generateRandomPin(), active: true });
     setShowForm(true);
   };
 
   const openEdit = (e: any) => {
-    const { pinLogin, pinStock } = generatePinPair();
     setEditingId(e.id);
     setForm({
       name: e.name,
       role: e.role || "casier",
-      pin_login: pinLogin,
-      removal_pin: pinStock,
+      pin_login: generateRandomPin(),
       active: e.active,
     });
     setShowForm(true);
   };
 
-  const regeneratePins = () => {
-    const { pinLogin, pinStock } = generatePinPair();
-    setForm(f => ({ ...f, pin_login: pinLogin, removal_pin: pinStock }));
-  };
-
   const copyCredentials = () => {
     if (!createdCreds) return;
-    const text = `Angajat: ${createdCreds.name}\nRol: ${createdCreds.role}\nCod Card: ${createdCreds.cardCode}\nPIN Login: ${createdCreds.pinLogin}\nPIN Scoatere: ${createdCreds.pinStock}`;
+    const text = `Angajat: ${createdCreds.name}\nRol: ${createdCreds.role}\nCod Card: ${createdCreds.cardCode}\nPIN Login: ${createdCreds.pinLogin}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -226,7 +189,6 @@ export default function EmployeesTab() {
                 <TableHead>Rol</TableHead>
                 <TableHead>Cod Card</TableHead>
                 <TableHead>PIN Login</TableHead>
-                <TableHead>PIN Scoatere</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Acțiuni</TableHead>
               </TableRow>
@@ -239,7 +201,6 @@ export default function EmployeesTab() {
                     <Badge variant="secondary" className="text-xs capitalize">{(e as any).role || "casier"}</Badge>
                   </TableCell>
                   <TableCell className="font-mono">{e.employee_card_code}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">••••</TableCell>
                   <TableCell className="font-mono text-muted-foreground">••••</TableCell>
                   <TableCell>
                     {e.active
@@ -260,7 +221,7 @@ export default function EmployeesTab() {
                 </TableRow>
               ))}
               {employees.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Niciun angajat</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Niciun angajat</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -298,31 +259,21 @@ export default function EmployeesTab() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>PIN Login (4 cifre) *</Label>
+            <div>
+              <Label>PIN Login (4 cifre) *</Label>
+              <div className="flex gap-2">
                 <Input
                   value={form.pin_login}
                   onChange={e => setForm({ ...form, pin_login: e.target.value.replace(/\D/g, "").slice(0, 4) })}
-                  className="font-mono"
+                  className="font-mono flex-1"
                   maxLength={4}
                   placeholder="••••"
                 />
-              </div>
-              <div>
-                <Label>PIN Scoatere (4 cifre) *</Label>
-                <Input
-                  value={form.removal_pin}
-                  onChange={e => setForm({ ...form, removal_pin: e.target.value.replace(/\D/g, "").slice(0, 4) })}
-                  className="font-mono"
-                  maxLength={4}
-                  placeholder="••••"
-                />
+                <Button type="button" variant="outline" size="sm" onClick={() => setForm(f => ({ ...f, pin_login: generateRandomPin() }))}>
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={regeneratePins} className="w-fit">
-              <RefreshCw className="h-3 w-3 mr-1" />Regenerează PIN-uri
-            </Button>
 
             <div className="flex items-center gap-2">
               <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
@@ -333,7 +284,7 @@ export default function EmployeesTab() {
             <Button variant="outline" onClick={() => setShowForm(false)}>Anulează</Button>
             <Button
               onClick={() => saveMutation.mutate(form)}
-              disabled={saveMutation.isPending || !form.name || form.pin_login.length !== 4 || form.removal_pin.length !== 4}
+              disabled={saveMutation.isPending || !form.name || form.pin_login.length !== 4}
             >
               {saveMutation.isPending ? "Se salvează..." : "Salvează"}
             </Button>
@@ -350,7 +301,7 @@ export default function EmployeesTab() {
               Credențiale Generate
             </DialogTitle>
             <DialogDescription>
-              Notează aceste date. PIN-urile nu vor mai fi afișate după închiderea acestui dialog.
+              Notează aceste date. PIN-ul nu va mai fi afișat după închiderea acestui dialog.
             </DialogDescription>
           </DialogHeader>
           {createdCreds && (
@@ -373,11 +324,10 @@ export default function EmployeesTab() {
                   <span className="text-sm text-muted-foreground">PIN Login</span>
                   <span className="font-mono font-bold text-lg">{createdCreds.pinLogin}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">PIN Scoatere</span>
-                  <span className="font-mono font-bold text-lg">{createdCreds.pinStock}</span>
-                </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                PIN-ul de scoatere stoc este global pe rol și se configurează din Setări.
+              </p>
               <Button variant="outline" className="w-full" onClick={copyCredentials}>
                 {copied ? <><Check className="h-4 w-4 mr-2" />Copiat!</> : <><Copy className="h-4 w-4 mr-2" />Copiază credențialele</>}
               </Button>

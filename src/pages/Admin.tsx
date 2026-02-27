@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -8,6 +8,7 @@ import ReportsTab from "@/components/admin/ReportsTab";
 import CustomersTab from "@/components/admin/CustomersTab";
 import ArticolDictionaryTab from "@/components/admin/ArticolDictionaryTab";
 import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
+import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +129,7 @@ export default function Admin() {
           <TabsTrigger value="articole"><BookOpen className="h-3 w-3 mr-1" />Articole</TabsTrigger>
           <TabsTrigger value="depozit"><Warehouse className="h-3 w-3 mr-1" />Depozit</TabsTrigger>
           <TabsTrigger value="barcode-gen"><Barcode className="h-3 w-3 mr-1" />Generator</TabsTrigger>
+          <TabsTrigger value="settings"><Lock className="h-3 w-3 mr-1" />Setări</TabsTrigger>
         </TabsList>
 
         {/* Sales tab */}
@@ -222,6 +224,7 @@ export default function Admin() {
         <TabsContent value="articole"><ArticolDictionaryTab /></TabsContent>
         <TabsContent value="depozit"><DepozitTab /></TabsContent>
         <TabsContent value="barcode-gen"><BarcodeGeneratorTab /></TabsContent>
+        <TabsContent value="settings"><StockPinSettingsTab /></TabsContent>
       </Tabs>
     </div>
   );
