@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,13 +15,24 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Redirect if already logged in
+  if (user) {
+    navigate("/pos", { replace: true });
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
         if (error) throw error;
         toast({ title: "Cont creat!", description: "Verifică email-ul pentru confirmare." });
       } else {
@@ -36,13 +48,13 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background dark">
+    <div className="flex min-h-screen items-center justify-center bg-background">
       <Card className="w-full max-w-md border-border">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <span className="font-display text-2xl font-bold text-primary-foreground">C</span>
+            <span className="font-parkavenue text-2xl text-primary-foreground">C</span>
           </div>
-          <CardTitle className="font-display text-2xl text-gold-gradient">Cesar's</CardTitle>
+          <CardTitle className="font-parkavenue text-3xl text-gold-gradient">Cesar's</CardTitle>
           <CardDescription>{isSignUp ? "Creare cont nou" : "Autentificare sistem retail"}</CardDescription>
         </CardHeader>
         <CardContent>

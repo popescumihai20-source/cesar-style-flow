@@ -1,6 +1,7 @@
-import { ShoppingCart, Package, Truck, PackageMinus, Settings, LayoutDashboard } from "lucide-react";
+import { ShoppingCart, Package, Truck, PackageMinus, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -14,26 +15,37 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { title: "POS", url: "/pos", icon: ShoppingCart },
-  { title: "Produse", url: "/produse", icon: Package },
-  { title: "Recepție", url: "/receptie", icon: Truck },
-  { title: "Scoatere Stoc", url: "/scoatere-stoc", icon: PackageMinus },
-  { title: "Admin", url: "/admin", icon: Settings },
+  { title: "POS", url: "/pos", icon: ShoppingCart, roles: [] },
+  { title: "Produse", url: "/produse", icon: Package, roles: ["admin"] },
+  { title: "Recepție", url: "/receptie", icon: Truck, roles: ["admin", "depozit"] },
+  { title: "Scoatere Stoc", url: "/scoatere-stoc", icon: PackageMinus, roles: [] },
+  { title: "Admin", url: "/admin", icon: Settings, roles: ["admin"] },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
+  const { roles, user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const visibleItems = navItems.filter(
+    (item) => item.roles.length === 0 || item.roles.some((r) => roles.includes(r as any))
+  );
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <span className="font-display text-lg font-bold text-primary-foreground">C</span>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent">
+            <span className="font-parkavenue text-lg text-accent-foreground">C</span>
           </div>
           {!collapsed && (
             <div>
@@ -49,7 +61,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigare</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
@@ -69,11 +81,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-1 text-xs text-sidebar-foreground/40">
-          <LayoutDashboard className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>Mod PUBLIC</span>}
-        </div>
+      <SidebarFooter className="border-t border-sidebar-border p-2">
+        {!collapsed && user && (
+          <p className="text-[10px] text-sidebar-foreground/40 px-2 mb-1 truncate">
+            {user.email}
+          </p>
+        )}
+        <Button
+          variant="ghost"
+          size={collapsed ? "icon" : "sm"}
+          className="w-full text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+          onClick={handleSignOut}
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && <span className="ml-2">Deconectare</span>}
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );
