@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Truck, Plus, Trash2, Search, Save, CheckCircle, Camera } from "lucide-react";
+import { ExcelImport, type ExcelRow } from "@/components/receptie/ExcelImport";
 import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,11 @@ interface ReceiptRow {
   variantCode: string;
   quantity: number;
   costPrice: number;
+  sellingPrice: number;
+  articol: string;
+  model: string;
+  producator: string;
+  dataReceptie: string;
 }
 
 export default function Receptie() {
@@ -51,8 +57,27 @@ export default function Receptie() {
     setRows(prev => [...prev, {
       id: crypto.randomUUID(),
       productId: null, productName: "", baseId: "",
-      variantCode: "", quantity: 1, costPrice: 0,
+      variantCode: "", quantity: 1, costPrice: 0, sellingPrice: 0,
+      articol: "", model: "", producator: "", dataReceptie: "",
     }]);
+  }, []);
+
+  const handleExcelImport = useCallback((excelRows: ExcelRow[]) => {
+    const newRows: ReceiptRow[] = excelRows.map(er => ({
+      id: crypto.randomUUID(),
+      productId: null,
+      productName: `${er.model}`,
+      baseId: "",
+      variantCode: er.articol,
+      quantity: 1,
+      costPrice: er.pretAchizitie,
+      sellingPrice: er.pretVanzare,
+      articol: er.articol,
+      model: er.model,
+      producator: er.producator,
+      dataReceptie: er.data,
+    }));
+    setRows(prev => [...prev, ...newRows]);
   }, []);
 
   const removeRow = useCallback((id: string) => {
@@ -182,7 +207,8 @@ export default function Receptie() {
             <p className="text-xs text-muted-foreground">Adaugă produse în stoc</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <ExcelImport onImport={handleExcelImport} />
           <Button variant="outline" size="sm" onClick={addRow}><Plus className="h-4 w-4 mr-1" />Adaugă Rând</Button>
           <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || rows.length === 0}>
             <CheckCircle className="h-4 w-4 mr-1" />{isSubmitting ? "Se salvează..." : "Salvează Recepția"}
@@ -196,11 +222,14 @@ export default function Receptie() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[200px]">Cod de bare / Produs</TableHead>
-                <TableHead>Produs</TableHead>
-                <TableHead>Variantă</TableHead>
-                <TableHead className="text-right w-24">Cantitate</TableHead>
-                <TableHead className="text-right w-32">Preț Achiziție</TableHead>
-                <TableHead className="w-16"></TableHead>
+                <TableHead>Articol</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Producător</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead className="text-right w-28">Preț Vânzare</TableHead>
+                <TableHead className="text-right w-28">Preț Achiziție</TableHead>
+                <TableHead className="text-right w-20">Cant.</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -225,20 +254,26 @@ export default function Receptie() {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{row.productName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Input value={row.variantCode} onChange={e => updateRow(row.id, { variantCode: e.target.value })} className="h-8 w-20 text-xs" placeholder="Cod" />
-                      {row.variantCode && (
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{getArticolLabel(row.variantCode)}</span>
-                      )}
-                    </div>
+                    <Input value={row.articol} onChange={e => updateRow(row.id, { articol: e.target.value })} className="h-8 text-xs" placeholder="Articol" />
                   </TableCell>
                   <TableCell>
-                    <Input type="number" value={row.quantity} onChange={e => updateRow(row.id, { quantity: parseInt(e.target.value) || 0 })} className="h-8 text-right text-sm" />
+                    <Input value={row.model} onChange={e => updateRow(row.id, { model: e.target.value, productName: e.target.value })} className="h-8 text-xs" placeholder="Model" />
+                  </TableCell>
+                  <TableCell>
+                    <Input value={row.producator} onChange={e => updateRow(row.id, { producator: e.target.value })} className="h-8 text-xs" placeholder="Producător" />
+                  </TableCell>
+                  <TableCell>
+                    <Input value={row.dataReceptie} onChange={e => updateRow(row.id, { dataReceptie: e.target.value })} className="h-8 w-28 text-xs" placeholder="ZZ/LL/AAAA" />
+                  </TableCell>
+                  <TableCell>
+                    <Input type="number" value={row.sellingPrice} onChange={e => updateRow(row.id, { sellingPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
                   </TableCell>
                   <TableCell>
                     <Input type="number" value={row.costPrice} onChange={e => updateRow(row.id, { costPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
+                  </TableCell>
+                  <TableCell>
+                    <Input type="number" value={row.quantity} onChange={e => updateRow(row.id, { quantity: parseInt(e.target.value) || 0 })} className="h-8 w-16 text-right text-sm" />
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeRow(row.id)}>
@@ -249,8 +284,8 @@ export default function Receptie() {
               ))}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    Apasă "Adaugă Rând" pentru a începe recepția
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    Importă un fișier Excel sau apasă "Adaugă Rând" pentru a începe recepția
                   </TableCell>
                 </TableRow>
               )}
