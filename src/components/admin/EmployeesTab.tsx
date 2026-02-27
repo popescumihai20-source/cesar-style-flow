@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, FileDown, RefreshCw } from "lucide-react";
+import { Plus, Edit, Trash2, FileDown, RefreshCw, ShieldAlert, Copy, Check } from "lucide-react";
 
 type EmployeeRole = "admin" | "casier";
 
@@ -40,10 +40,20 @@ function validatePin(pin: string, label: string): string | null {
   return null;
 }
 
+interface CreatedCredentials {
+  name: string;
+  role: string;
+  cardCode: string;
+  pinLogin: string;
+  pinStock: string;
+}
+
 export default function EmployeesTab() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [createdCreds, setCreatedCreds] = useState<CreatedCredentials | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     name: "",
     role: "casier" as EmployeeRole,
@@ -74,7 +84,6 @@ export default function EmployeesTab() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      // Validate pins
       const errLogin = validatePin(data.pin_login, "PIN Login");
       if (errLogin) throw new Error(errLogin);
       const errStock = validatePin(data.removal_pin, "PIN Scoatere");
@@ -91,6 +100,7 @@ export default function EmployeesTab() {
           active: data.active,
         }).eq("id", editingId);
         if (error) throw error;
+        return { isEdit: true, cardCode: "" };
       } else {
         const cardCode = getNextCardCode(data.role);
         const { error } = await supabase.from("employees").insert({
@@ -102,12 +112,34 @@ export default function EmployeesTab() {
           active: data.active,
         });
         if (error) throw error;
+        return { isEdit: false, cardCode };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-employees"] });
-      toast.success(editingId ? "Angajat actualizat" : "Angajat adăugat");
       setShowForm(false);
+
+      if (result.isEdit) {
+        // Show credentials modal for edited employee too (new pins)
+        setCreatedCreds({
+          name: form.name,
+          role: form.role,
+          cardCode: employees.find(e => e.id === editingId)?.employee_card_code || "",
+          pinLogin: form.pin_login,
+          pinStock: form.removal_pin,
+        });
+        toast.success("Angajat actualizat — PIN-uri noi generate");
+      } else {
+        // Show secure credentials modal
+        setCreatedCreds({
+          name: form.name,
+          role: form.role,
+          cardCode: result.cardCode,
+          pinLogin: form.pin_login,
+          pinStock: form.removal_pin,
+        });
+        toast.success("Angajat creat cu succes");
+      }
       setEditingId(null);
     },
     onError: (err: any) => toast.error(err.message),
@@ -148,6 +180,19 @@ export default function EmployeesTab() {
   const regeneratePins = () => {
     const { pinLogin, pinStock } = generatePinPair();
     setForm(f => ({ ...f, pin_login: pinLogin, removal_pin: pinStock }));
+  };
+
+  const copyCredentials = () => {
+    if (!createdCreds) return;
+    const text = `Angajat: ${createdCreds.name}\nRol: ${createdCreds.role}\nCod Card: ${createdCreds.cardCode}\nPIN Login: ${createdCreds.pinLogin}\nPIN Scoatere: ${createdCreds.pinStock}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const closeCredentials = () => {
+    setCreatedCreds(null);
+    setCopied(false);
   };
 
   const exportCSV = () => {
@@ -292,6 +337,54 @@ export default function EmployeesTab() {
             >
               {saveMutation.isPending ? "Se salvează..." : "Salvează"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Secure Credentials Reveal Modal */}
+      <Dialog open={!!createdCreds} onOpenChange={closeCredentials}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Credențiale Generate
+            </DialogTitle>
+            <DialogDescription>
+              Notează aceste date. PIN-urile nu vor mai fi afișate după închiderea acestui dialog.
+            </DialogDescription>
+          </DialogHeader>
+          {createdCreds && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Nume</span>
+                  <span className="font-medium">{createdCreds.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Rol</span>
+                  <span className="font-medium capitalize">{createdCreds.role}</span>
+                </div>
+                <div className="border-t border-border my-2" />
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Cod Card</span>
+                  <span className="font-mono font-bold text-lg">{createdCreds.cardCode}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">PIN Login</span>
+                  <span className="font-mono font-bold text-lg">{createdCreds.pinLogin}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">PIN Scoatere</span>
+                  <span className="font-mono font-bold text-lg">{createdCreds.pinStock}</span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full" onClick={copyCredentials}>
+                {copied ? <><Check className="h-4 w-4 mr-2" />Copiat!</> : <><Copy className="h-4 w-4 mr-2" />Copiază credențialele</>}
+              </Button>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={closeCredentials} className="w-full">Am notat — Închide</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
