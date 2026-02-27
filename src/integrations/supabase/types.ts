@@ -298,6 +298,7 @@ export type Database = {
           name: string
           seasonal_tag: Database["public"]["Enums"]["seasonal_tag"]
           selling_price: number
+          stock_depozit: number
           stock_general: number
           tags: string[] | null
           updated_at: string
@@ -315,6 +316,7 @@ export type Database = {
           name: string
           seasonal_tag?: Database["public"]["Enums"]["seasonal_tag"]
           selling_price?: number
+          stock_depozit?: number
           stock_general?: number
           tags?: string[] | null
           updated_at?: string
@@ -332,6 +334,7 @@ export type Database = {
           name?: string
           seasonal_tag?: Database["public"]["Enums"]["seasonal_tag"]
           selling_price?: number
+          stock_depozit?: number
           stock_general?: number
           tags?: string[] | null
           updated_at?: string
@@ -487,6 +490,51 @@ export type Database = {
           },
         ]
       }
+      stock_receipt_items_depozit: {
+        Row: {
+          cost_price: number
+          created_at: string
+          id: string
+          product_id: string
+          quantity: number
+          receipt_id: string
+          variant_code: string | null
+        }
+        Insert: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity: number
+          receipt_id: string
+          variant_code?: string | null
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          receipt_id?: string
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_receipt_items_depozit_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_receipt_items_depozit_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "stock_receipts_depozit"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_receipts: {
         Row: {
           created_at: string
@@ -509,6 +557,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "stock_receipts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_receipts_depozit: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_receipts_depozit_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
@@ -554,6 +631,99 @@ export type Database = {
           },
           {
             foreignKeyName: "stock_removals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_removals_depozit: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          product_id: string
+          quantity: number
+          reason: string | null
+          variant_code: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          product_id: string
+          quantity: number
+          reason?: string | null
+          variant_code?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          reason?: string | null
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_removals_depozit_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_removals_depozit_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_transfers: {
+        Row: {
+          created_at: string
+          direction: string
+          employee_id: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          variant_code: string | null
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          variant_code?: string | null
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfers_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
