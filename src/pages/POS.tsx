@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import CashierDashboard from "@/components/pos/CashierDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { parseBarcode } from "@/lib/barcode-parser";
 import { usePOS } from "@/hooks/use-pos";
@@ -344,8 +345,14 @@ export default function POS() {
         {/* Cart items */}
         <div className="flex-1 overflow-auto space-y-2">
           {cart.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              <p>{mode === "public" ? "Scanează cardul pentru a începe vânzarea" : "Scanează produse pentru a le adăuga în coș"}</p>
+            <div className="flex h-full items-center justify-center">
+              {mode === "casier" && cashierEmployeeId ? (
+                <div className="w-full max-w-lg">
+                  <CashierDashboard employeeId={cashierEmployeeId} cashierName={cashierName} />
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Scanează cardul pentru a începe vânzarea</p>
+              )}
             </div>
           ) : (
             cart.map((item) => (
