@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle } from "lucide-react";
+import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { parseBarcode } from "@/lib/barcode-parser";
@@ -34,7 +34,20 @@ export default function POS() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showFinalize, setShowFinalize] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastSale, setLastSale] = useState<{
+    internalId: string;
+    total: number;
+    paymentMethod: string;
+    cashAmount: number;
+    cardAmount: number;
+    change: number;
+    itemCount: number;
+    cashierName: string;
+    commissions: number;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [amountReceived, setAmountReceived] = useState<number>(0);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -153,6 +166,9 @@ export default function POS() {
       const { data: idData } = await supabase.rpc("generate_sale_internal_id");
       const internalId = idData || `CES-${Date.now()}`;
 
+      const finalCashAmount = paymentMethod === "numerar" ? cartTotal : paymentMethod === "mixt" ? cashAmount : null;
+      const finalCardAmount = paymentMethod === "card" ? cartTotal : paymentMethod === "mixt" ? cardAmount : null;
+
       // Create sale
       const { data: sale, error: saleError } = await supabase
         .from("sales")
@@ -163,8 +179,8 @@ export default function POS() {
           total: cartTotal,
           discount_total: cartDiscountTotal,
           payment_method: paymentMethod,
-          cash_amount: paymentMethod === "numerar" ? cartTotal : paymentMethod === "mixt" ? cashAmount : null,
-          card_amount: paymentMethod === "card" ? cartTotal : paymentMethod === "mixt" ? cardAmount : null,
+          cash_amount: finalCashAmount,
+          card_amount: finalCardAmount,
         })
         .select()
         .single();
@@ -186,26 +202,93 @@ export default function POS() {
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Decrement stock (optimistic)
+      // Decrement stock (general + variant)
       for (const item of cart) {
+        // Always decrement stock_general
         await supabase
           .from("products")
           .update({ stock_general: item.product.stock_general - item.quantity })
           .eq("id", item.product.id);
+
+        // If V2 barcode (has variantCode), also decrement variant stock
+        if (item.variantCode) {
+          const { data: variant } = await supabase
+            .from("product_variants")
+            .select("id, stock_variant")
+            .eq("product_id", item.product.id)
+            .eq("variant_code", item.variantCode)
+            .maybeSingle();
+
+          if (variant) {
+            await supabase
+              .from("product_variants")
+              .update({ stock_variant: variant.stock_variant - item.quantity })
+              .eq("id", variant.id);
+          }
+        }
       }
+
+      // Auto bulina commissions
+      let totalCommission = 0;
+      for (const item of cart) {
+        if (item.isGift) continue; // no commission on gifts
+        
+        const { data: bulina } = await supabase
+          .from("product_bulina")
+          .select("bulina_id, bulina_commissions(commission_value, active)")
+          .eq("product_id", item.product.id)
+          .maybeSingle();
+
+        if (bulina && (bulina as any).bulina_commissions?.active) {
+          const commissionValue = (bulina as any).bulina_commissions.commission_value * item.quantity;
+          totalCommission += commissionValue;
+
+          await supabase.from("commission_logs").insert({
+            sale_id: sale.id,
+            employee_id: cashierEmployeeId!,
+            bulina_id: bulina.bulina_id,
+            amount: commissionValue,
+          });
+        }
+      }
+
+      // Calculate change
+      const change = paymentMethod === "numerar" && amountReceived > 0
+        ? Math.max(0, amountReceived - cartTotal)
+        : 0;
+
+      // Store last sale for receipt
+      setLastSale({
+        internalId,
+        total: cartTotal,
+        paymentMethod,
+        cashAmount: finalCashAmount || 0,
+        cardAmount: finalCardAmount || 0,
+        change,
+        itemCount: cartItemCount,
+        cashierName,
+        commissions: totalCommission,
+      });
+
+      setShowFinalize(false);
+      setShowReceipt(true);
 
       toast({
         title: `✅ Vânzare finalizată: ${internalId}`,
-        description: `Total: ${cartTotal.toFixed(2)} RON`,
+        description: `Total: ${cartTotal.toFixed(2)} RON${totalCommission > 0 ? ` | Comision: ${totalCommission.toFixed(2)} RON` : ""}`,
       });
-
-      resetToPublic();
     } catch (err: any) {
       toast({ title: "Eroare la finalizare", description: err.message, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
-      setShowFinalize(false);
     }
+  };
+
+  const handleCloseReceipt = () => {
+    setShowReceipt(false);
+    setLastSale(null);
+    setAmountReceived(0);
+    resetToPublic();
   };
 
   return (
@@ -517,13 +600,37 @@ export default function POS() {
               <span className="font-mono">{cartItemCount}</span>
             </div>
             <div className="flex justify-between">
-              <span>Total:</span>
+              <span>Total de plată:</span>
               <span className="font-bold text-lg">{cartTotal.toFixed(2)} RON</span>
             </div>
             <div className="flex justify-between">
               <span>Plată:</span>
               <span className="capitalize">{paymentMethod}</span>
             </div>
+            {(paymentMethod === "numerar" || paymentMethod === "mixt") && (
+              <div className="border-t border-border pt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Suma primită:</span>
+                  <Input
+                    type="number"
+                    value={amountReceived || ""}
+                    onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
+                    placeholder={cartTotal.toFixed(2)}
+                    className="h-9 w-32 font-mono text-right"
+                    autoFocus
+                  />
+                </div>
+                {amountReceived > 0 && amountReceived >= (paymentMethod === "mixt" ? cashAmount : cartTotal) && (
+                  <div className="flex justify-between bg-accent/50 rounded-lg p-3">
+                    <span className="font-medium">Rest de dat:</span>
+                    <span className="text-xl font-bold text-primary font-mono">
+                      {(amountReceived - (paymentMethod === "mixt" ? cashAmount : cartTotal)).toFixed(2)} RON
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Casier:</span>
               <span>{cashierName}</span>
@@ -535,6 +642,69 @@ export default function POS() {
               {isSubmitting ? "Se procesează..." : "Confirmă și Finalizează"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt confirmation dialog */}
+      <Dialog open={showReceipt} onOpenChange={(open) => { if (!open) handleCloseReceipt(); }}>
+        <DialogContent className="max-w-sm">
+          <div className="text-center space-y-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+              <CheckCircle className="h-8 w-8 text-green-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Vânzare Finalizată!</h2>
+              <p className="text-sm text-muted-foreground font-mono">{lastSale?.internalId}</p>
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Articole</span>
+                <span className="font-mono">{lastSale?.itemCount}</span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-2">
+                <span className="font-bold">TOTAL</span>
+                <span className="text-lg font-bold font-mono">{lastSale?.total.toFixed(2)} RON</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Plată</span>
+                <span className="capitalize">{lastSale?.paymentMethod}</span>
+              </div>
+              {lastSale?.paymentMethod === "mixt" && (
+                <>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Numerar</span>
+                    <span className="font-mono">{lastSale.cashAmount.toFixed(2)} RON</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Card</span>
+                    <span className="font-mono">{lastSale.cardAmount.toFixed(2)} RON</span>
+                  </div>
+                </>
+              )}
+              {lastSale && lastSale.change > 0 && (
+                <div className="flex justify-between bg-accent rounded-lg p-2 mt-2">
+                  <span className="font-bold">REST</span>
+                  <span className="text-xl font-bold text-primary font-mono">{lastSale.change.toFixed(2)} RON</span>
+                </div>
+              )}
+              {lastSale && lastSale.commissions > 0 && (
+                <div className="flex justify-between text-muted-foreground border-t border-border pt-2">
+                  <span>Comision buline</span>
+                  <span className="font-mono text-green-500">+{lastSale.commissions.toFixed(2)} RON</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs text-muted-foreground border-t border-border pt-2">
+                <span>Casier</span>
+                <span>{lastSale?.cashierName}</span>
+              </div>
+            </div>
+
+            <Button className="w-full h-12 text-base" onClick={handleCloseReceipt}>
+              <Receipt className="h-4 w-4 mr-2" />
+              OK — Vânzare Nouă
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
