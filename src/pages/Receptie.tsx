@@ -4,6 +4,7 @@ import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode } from "@/lib/barcode-parser";
+import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,7 @@ export default function Receptie() {
   const [scannerRowId, setScannerRowId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getArticolLabel } = useArticolDictionary();
 
   const { data: products = [] } = useQuery({
     queryKey: ["products-pos"],
@@ -225,7 +227,12 @@ export default function Receptie() {
                   </TableCell>
                   <TableCell className="text-sm">{row.productName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
-                    <Input value={row.variantCode} onChange={e => updateRow(row.id, { variantCode: e.target.value })} className="h-8 w-20 text-xs" placeholder="Cod" />
+                    <div className="flex items-center gap-1">
+                      <Input value={row.variantCode} onChange={e => updateRow(row.id, { variantCode: e.target.value })} className="h-8 w-20 text-xs" placeholder="Cod" />
+                      {row.variantCode && (
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{getArticolLabel(row.variantCode)}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input type="number" value={row.quantity} onChange={e => updateRow(row.id, { quantity: parseInt(e.target.value) || 0 })} className="h-8 text-right text-sm" />

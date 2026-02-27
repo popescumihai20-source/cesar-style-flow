@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { parseBarcode } from "@/lib/barcode-parser";
+import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
 import { Product } from "@/types/pos";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ export default function POS() {
   const [amountReceived, setAmountReceived] = useState<number>(0);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { getArticolLabel } = useArticolDictionary();
 
   // Fetch products for search
   const { data: products = [] } = useQuery({
@@ -362,8 +364,8 @@ export default function POS() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium truncate">{item.product.name}</p>
-                      {item.variantLabel && (
-                        <Badge variant="secondary" className="text-xs">{item.variantLabel}</Badge>
+                      {item.variantCode && (
+                        <Badge variant="secondary" className="text-xs">{getArticolLabel(item.variantCode)}</Badge>
                       )}
                       {item.isGift && (
                         <Badge className="bg-primary/20 text-primary text-xs">

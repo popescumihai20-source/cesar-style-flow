@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      articol_dictionary: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       barcode_config: {
         Row: {
           active_lengths: number[]

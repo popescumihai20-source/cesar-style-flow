@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
 import BulineTab from "@/components/admin/BulineTab";
 import ReportsTab from "@/components/admin/ReportsTab";
 import CustomersTab from "@/components/admin/CustomersTab";
+import ArticolDictionaryTab from "@/components/admin/ArticolDictionaryTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +124,7 @@ export default function Admin() {
           <TabsTrigger value="devices">Dispozitive</TabsTrigger>
           <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
           <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
+          <TabsTrigger value="articole"><BookOpen className="h-3 w-3 mr-1" />Articole</TabsTrigger>
           <TabsTrigger value="depozit"><Warehouse className="h-3 w-3 mr-1" />Depozit</TabsTrigger>
         </TabsList>
 
@@ -215,6 +217,7 @@ export default function Admin() {
         <TabsContent value="devices"><DevicesTab /></TabsContent>
         <TabsContent value="buline"><BulineTab /></TabsContent>
         <TabsContent value="customers"><CustomersTab /></TabsContent>
+        <TabsContent value="articole"><ArticolDictionaryTab /></TabsContent>
         <TabsContent value="depozit"><DepozitTab /></TabsContent>
       </Tabs>
     </div>
