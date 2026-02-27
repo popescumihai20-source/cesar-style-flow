@@ -3,7 +3,7 @@ import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknot
 import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
 import { useQuery } from "@tanstack/react-query";
-import { parseBarcode } from "@/lib/barcode-parser";
+import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
 import { Product } from "@/types/pos";
@@ -104,12 +104,14 @@ export default function POS() {
         toast({ title: `Sesiune casier: ${employee.name}`, description: "Gata de vânzare!" });
       } else {
         // Try as product barcode for public view
-        const parsed = parseBarcode(trimmed);
-        if (parsed.isValid) {
-          const product = products.find(p => p.base_id === parsed.baseId);
-          if (product) {
-            setSearchQuery(product.name);
-            setShowSearch(true);
+        if (isValidBarcode(trimmed)) {
+          const parsed = parseBarcode(trimmed);
+          if (parsed.isValid) {
+            const product = products.find(p => p.base_id === parsed.baseId);
+            if (product) {
+              setSearchQuery(product.name);
+              setShowSearch(true);
+            }
           }
         }
       }
@@ -118,12 +120,16 @@ export default function POS() {
     }
 
     // CASIER mode — add product to cart
+    if (!isValidBarcode(trimmed)) {
+      toast({ title: "Cod invalid", description: `Codul trebuie să aibă exact 17 cifre numerice`, variant: "destructive" });
+      setScanInput("");
+      return;
+    }
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
       const product = products.find(p => p.base_id === parsed.baseId);
       if (product) {
-        addToCart(product, parsed.variantCode, parsed.variantCode);
-        // Check stock warning
+        addToCart(product, null, null);
         const currentStock = product.stock_general;
         const inCart = cart.filter(c => c.product.id === product.id).reduce((s, c) => s + c.quantity, 0);
         if (currentStock - inCart <= 0) {
@@ -136,9 +142,6 @@ export default function POS() {
       } else {
         toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId}`, variant: "destructive" });
       }
-    } else {
-      // Maybe it's an employee card scan during cashier mode (ignore)
-      toast({ title: "Cod invalid", description: parsed.error, variant: "destructive" });
     }
     setScanInput("");
   }, [mode, products, cart, activateCashier, addToCart, recordActivity, toast]);

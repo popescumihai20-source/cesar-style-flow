@@ -19,19 +19,20 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ReceiptRow {
   id: string;
-  articolCode: string;   // 2-digit code from dictionary
-  modelCode: string;     // 2-digit code from color dictionary
-  producatorCode: string; // 2-digit code from dictionary
+  articolCode: string;
+  modelCode: string;
+  producatorCode: string;
+  permanent: boolean;
   dataReceptie: string;
   sellingPrice: number;
   costPrice: number;
 }
 
-function buildBaseId(articol: string, model: string, producator: string): string {
+function buildBaseId(articol: string, model: string, producator: string, permanent: boolean): string {
   const a = articol.padStart(2, "0").substring(0, 2);
   const m = model.padStart(2, "0").substring(0, 2);
   const p = producator.padStart(2, "0").substring(0, 2);
-  return a + m + p + "0"; // 7 digits
+  return a + m + p + (permanent ? "1" : "0"); // 7 digits
 }
 
 function parseDateFromField(dateStr: string): Date | null {
@@ -66,7 +67,7 @@ export default function Receptie() {
     setRows(prev => [...prev, {
       id: crypto.randomUUID(),
       articolCode: "", modelCode: "", producatorCode: "",
-      dataReceptie: "", sellingPrice: 0, costPrice: 0,
+      permanent: true, dataReceptie: "", sellingPrice: 0, costPrice: 0,
     }]);
   }, []);
 
@@ -82,6 +83,7 @@ export default function Receptie() {
         articolCode: artMatch?.code || er.articol,
         modelCode: colorMatch?.code || er.model,
         producatorCode: prodMatch?.code || er.producator,
+        permanent: true,
         dataReceptie: er.data,
         sellingPrice: er.pretVanzare,
         costPrice: er.pretAchizitie,
@@ -114,7 +116,7 @@ export default function Receptie() {
       if (receiptError) throw receiptError;
 
       for (const row of validRows) {
-        const baseId = buildBaseId(row.articolCode, row.modelCode, row.producatorCode);
+        const baseId = buildBaseId(row.articolCode, row.modelCode, row.producatorCode, row.permanent);
         const entryDate = parseDateFromField(row.dataReceptie) || new Date();
 
         const { data: existing } = await supabase
@@ -215,8 +217,10 @@ export default function Receptie() {
                 const canGenerate = /^\d{2}$/.test(row.articolCode) && /^\d{2}$/.test(row.modelCode) && /^\d{2}$/.test(row.producatorCode);
                 const generatedBarcode = canGenerate
                   ? generateBarcode(
-                      buildBaseId(row.articolCode, row.modelCode, row.producatorCode),
-                      null,
+                      row.articolCode,
+                      row.modelCode,
+                      row.producatorCode,
+                      row.permanent,
                       parseDateFromField(row.dataReceptie) || new Date(),
                       Math.round(row.sellingPrice)
                     )
