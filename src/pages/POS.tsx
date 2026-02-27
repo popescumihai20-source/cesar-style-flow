@@ -92,26 +92,31 @@ export default function POS() {
 
     // If PUBLIC mode, try to find employee card
     if (mode === "public") {
-      const { data: employee } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("employee_card_code", trimmed)
-        .eq("active", true)
-        .maybeSingle();
+      // Validate as 7-digit employee card
+      if (/^\d{7}$/.test(trimmed)) {
+        const { data: employee } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("employee_card_code", trimmed)
+          .eq("active", true)
+          .maybeSingle();
 
-      if (employee) {
-        activateCashier(employee.id, employee.name);
-        toast({ title: `Sesiune casier: ${employee.name}`, description: "Gata de vânzare!" });
-      } else {
-        // Try as product barcode for public view
-        if (isValidBarcode(trimmed)) {
-          const parsed = parseBarcode(trimmed);
-          if (parsed.isValid) {
-            const product = products.find(p => p.base_id === parsed.baseId);
-            if (product) {
-              setSearchQuery(product.name);
-              setShowSearch(true);
-            }
+        if (employee) {
+          activateCashier(employee.id, employee.name);
+          toast({ title: `Sesiune casier: ${employee.name}`, description: "Gata de vânzare!" });
+          setScanInput("");
+          return;
+        }
+      }
+
+      // Try as product barcode for public view
+      if (isValidBarcode(trimmed)) {
+        const parsed = parseBarcode(trimmed);
+        if (parsed.isValid) {
+          const product = products.find(p => p.base_id === parsed.baseId);
+          if (product) {
+            setSearchQuery(product.name);
+            setShowSearch(true);
           }
         }
       }

@@ -12,17 +12,48 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, FileDown, Shield } from "lucide-react";
+import { Plus, Edit, Trash2, FileDown, Shield, RefreshCw } from "lucide-react";
 
 type AppRole = "admin" | "casier" | "depozit";
 const ALL_ROLES: AppRole[] = ["admin", "casier", "depozit"];
+
+const WEAK_PINS = ["0000","1111","2222","3333","4444","5555","6666","7777","8888","9999","1234","4321"];
+
+function generateRandomPin(): string {
+  let pin: string;
+  do {
+    pin = String(Math.floor(1000 + Math.random() * 9000));
+  } while (WEAK_PINS.includes(pin));
+  return pin;
+}
+
+function generatePinPair(): { pinLogin: string; pinStock: string } {
+  const pinLogin = generateRandomPin();
+  let pinStock: string;
+  do {
+    pinStock = generateRandomPin();
+  } while (pinStock === pinLogin);
+  return { pinLogin, pinStock };
+}
+
+function validatePin(pin: string, label: string): string | null {
+  if (!/^\d{4}$/.test(pin)) return `${label} trebuie să fie exact 4 cifre`;
+  if (WEAK_PINS.includes(pin)) return `${label} este prea slab`;
+  return null;
+}
 
 export default function EmployeesTab() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showRoles, setShowRoles] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", employee_card_code: "", removal_pin: "", active: true });
+  const [form, setForm] = useState({
+    name: "",
+    role_prefix: "casier" as "admin" | "casier",
+    pin_login: "",
+    removal_pin: "",
+    active: true,
+  });
 
   const { data: employees = [] } = useQuery({
     queryKey: ["admin-employees"],
@@ -42,20 +73,47 @@ export default function EmployeesTab() {
     },
   });
 
+  const getNextCardCode = (prefix: "admin" | "casier"): string => {
+    const startChar = prefix === "admin" ? "9" : "1";
+    const defaultStart = prefix === "admin" ? 9000001 : 1000001;
+    const relevantCodes = employees
+      .map(e => e.employee_card_code)
+      .filter(c => c.startsWith(startChar) && /^\d{7}$/.test(c))
+      .map(Number);
+    const maxCode = relevantCodes.length > 0 ? Math.max(...relevantCodes) : defaultStart - 1;
+    return String(maxCode + 1);
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const payload: any = {
-        name: data.name,
-        employee_card_code: data.employee_card_code,
-        active: data.active,
-      };
-      if (data.removal_pin) payload.removal_pin = data.removal_pin;
+      // Validate pins
+      if (data.pin_login) {
+        const err = validatePin(data.pin_login, "PIN Login");
+        if (err) throw new Error(err);
+      }
+      if (data.removal_pin) {
+        const err = validatePin(data.removal_pin, "PIN Scoatere");
+        if (err) throw new Error(err);
+      }
+      if (data.pin_login && data.removal_pin && data.pin_login === data.removal_pin) {
+        throw new Error("PIN Login și PIN Scoatere trebuie să fie diferite");
+      }
 
       if (editingId) {
+        const payload: any = { name: data.name, active: data.active };
+        if (data.pin_login) payload.pin_login = data.pin_login;
+        if (data.removal_pin) payload.removal_pin = data.removal_pin;
         const { error } = await supabase.from("employees").update(payload).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("employees").insert(payload);
+        const cardCode = getNextCardCode(data.role_prefix);
+        const { error } = await supabase.from("employees").insert({
+          name: data.name,
+          employee_card_code: cardCode,
+          pin_login: data.pin_login || null,
+          removal_pin: data.removal_pin || null,
+          active: data.active,
+        });
         if (error) throw error;
       }
     },
@@ -98,15 +156,22 @@ export default function EmployeesTab() {
   });
 
   const openCreate = () => {
+    const { pinLogin, pinStock } = generatePinPair();
     setEditingId(null);
-    setForm({ name: "", employee_card_code: "", removal_pin: "", active: true });
+    setForm({ name: "", role_prefix: "casier", pin_login: pinLogin, removal_pin: pinStock, active: true });
     setShowForm(true);
   };
 
   const openEdit = (e: any) => {
     setEditingId(e.id);
-    setForm({ name: e.name, employee_card_code: e.employee_card_code, removal_pin: "", active: e.active });
+    const prefix = e.employee_card_code?.startsWith("9") ? "admin" : "casier";
+    setForm({ name: e.name, role_prefix: prefix, pin_login: "", removal_pin: "", active: e.active });
     setShowForm(true);
+  };
+
+  const regeneratePins = () => {
+    const { pinLogin, pinStock } = generatePinPair();
+    setForm(f => ({ ...f, pin_login: pinLogin, removal_pin: pinStock }));
   };
 
   const getRolesForUser = (userId: string | null) => {
@@ -145,6 +210,7 @@ export default function EmployeesTab() {
               <TableRow>
                 <TableHead>Nume</TableHead>
                 <TableHead>Cod Card</TableHead>
+                <TableHead>PIN Login</TableHead>
                 <TableHead>PIN Scoatere</TableHead>
                 <TableHead>Roluri</TableHead>
                 <TableHead>Status</TableHead>
@@ -158,6 +224,7 @@ export default function EmployeesTab() {
                   <TableRow key={e.id}>
                     <TableCell className="font-medium">{e.name}</TableCell>
                     <TableCell className="font-mono">{e.employee_card_code}</TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{(e as any).pin_login ? "••••" : "—"}</TableCell>
                     <TableCell className="font-mono text-muted-foreground">{e.removal_pin ? "••••" : "—"}</TableCell>
                     <TableCell>
                       {roles.length > 0
@@ -190,7 +257,7 @@ export default function EmployeesTab() {
                 );
               })}
               {employees.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Niciun angajat</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Niciun angajat</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -205,8 +272,56 @@ export default function EmployeesTab() {
           </DialogHeader>
           <div className="grid gap-3">
             <div><Label>Nume</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-            <div><Label>Cod Card</Label><Input value={form.employee_card_code} onChange={e => setForm({ ...form, employee_card_code: e.target.value })} className="font-mono" /></div>
-            <div><Label>PIN Scoatere {editingId && "(lasă gol pt. păstrare)"}</Label><Input type="password" value={form.removal_pin} onChange={e => setForm({ ...form, removal_pin: e.target.value })} className="font-mono" /></div>
+            
+            {!editingId && (
+              <div>
+                <Label>Tip (prefix cod card)</Label>
+                <Select value={form.role_prefix} onValueChange={(v: "admin" | "casier") => setForm({ ...form, role_prefix: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="casier">Casier (1xxxxxx)</SelectItem>
+                    <SelectItem value="admin">Admin (9xxxxxx)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cod card generat automat: <span className="font-mono font-bold">{getNextCardCode(form.role_prefix)}</span>
+                </p>
+              </div>
+            )}
+
+            {editingId && (
+              <div>
+                <Label>Cod Card</Label>
+                <Input value={employees.find(e => e.id === editingId)?.employee_card_code || ""} disabled className="font-mono bg-muted" />
+              </div>
+            )}
+
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label>PIN Login (4 cifre){editingId && " — lasă gol pt. păstrare"}</Label>
+                <Input
+                  value={form.pin_login}
+                  onChange={e => setForm({ ...form, pin_login: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                  className="font-mono"
+                  maxLength={4}
+                  placeholder="••••"
+                />
+              </div>
+              <div className="flex-1">
+                <Label>PIN Scoatere (4 cifre){editingId && " — lasă gol pt. păstrare"}</Label>
+                <Input
+                  value={form.removal_pin}
+                  onChange={e => setForm({ ...form, removal_pin: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                  className="font-mono"
+                  maxLength={4}
+                  placeholder="••••"
+                />
+              </div>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={regeneratePins} className="w-fit">
+              <RefreshCw className="h-3 w-3 mr-1" />Regenerează PIN-uri
+            </Button>
+
             <div className="flex items-center gap-2">
               <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
               <Label>Activ</Label>
@@ -214,7 +329,7 @@ export default function EmployeesTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Anulează</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !form.name || !form.employee_card_code}>
+            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !form.name}>
               {saveMutation.isPending ? "Se salvează..." : "Salvează"}
             </Button>
           </DialogFooter>
