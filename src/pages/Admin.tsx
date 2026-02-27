@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
+import EmployeesTab from "@/components/admin/EmployeesTab";
+import DevicesTab from "@/components/admin/DevicesTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,23 +31,6 @@ export default function Admin() {
     },
   });
 
-  const { data: employees = [] } = useQuery({
-    queryKey: ["admin-employees"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("employees").select("*").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: devices = [] } = useQuery({
-    queryKey: ["admin-devices"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("devices").select("*").order("device_name");
-      if (error) throw error;
-      return data;
-    },
-  });
 
   const { data: buline = [] } = useQuery({
     queryKey: ["admin-buline"],
@@ -229,68 +214,12 @@ export default function Admin() {
 
         {/* Employees tab */}
         <TabsContent value="employees">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base">Angajați</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => exportTable("angajati", ["Nume", "Card", "Activ"], employees.map(e => [e.name, e.employee_card_code, e.active]))}>
-                <FileDown className="h-3 w-3 mr-1" />Export
-              </Button>
-            </CardHeader>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nume</TableHead>
-                    <TableHead>Cod Card</TableHead>
-                    <TableHead>PIN Scoatere</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {employees.map(e => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-medium">{e.name}</TableCell>
-                      <TableCell className="font-mono">{e.employee_card_code}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">••••</TableCell>
-                      <TableCell>{e.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+          <EmployeesTab />
         </TabsContent>
 
         {/* Devices tab */}
         <TabsContent value="devices">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Dispozitive Înregistrate</CardTitle></CardHeader>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nume</TableHead>
-                    <TableHead>Cod</TableHead>
-                    <TableHead>Roluri Permise</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {devices.map(d => (
-                    <TableRow key={d.id}>
-                      <TableCell>{d.device_name}</TableCell>
-                      <TableCell className="font-mono">{d.device_code}</TableCell>
-                      <TableCell>{(d.allowed_roles || []).map((r: string) => <Badge key={r} variant="secondary" className="text-xs mr-1">{r}</Badge>)}</TableCell>
-                      <TableCell>{d.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
-                    </TableRow>
-                  ))}
-                  {devices.length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Niciun dispozitiv înregistrat</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+          <DevicesTab />
         </TabsContent>
 
         {/* Buline tab */}
