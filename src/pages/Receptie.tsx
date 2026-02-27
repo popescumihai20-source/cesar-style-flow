@@ -4,6 +4,7 @@ import { ExcelImport, type ExcelRow } from "@/components/receptie/ExcelImport";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { generateBarcode } from "@/lib/barcode-parser";
+import { BarcodePreview } from "@/components/receptie/BarcodePreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -230,7 +231,7 @@ export default function Receptie() {
                       <Input type="number" value={row.costPrice} onChange={e => updateRow(row.id, { costPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
                     </TableCell>
                     <TableCell>
-                      <span className="text-xs font-mono text-muted-foreground">{generatedBarcode}</span>
+                      <BarcodePreview value={generatedBarcode} />
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeRow(row.id)}>
