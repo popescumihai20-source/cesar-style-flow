@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { title: "POS", url: "/pos", icon: ShoppingCart, roles: [] },
+  { title: "Magazin Ferdinand", url: "/pos", icon: ShoppingCart, roles: [] },
   { title: "Produse", url: "/produse", icon: Package, roles: ["admin"] },
   { title: "Recepție", url: "/receptie", icon: Truck, roles: ["admin", "depozit"] },
   { title: "Scoatere Stoc", url: "/scoatere-stoc", icon: PackageMinus, roles: [] },
