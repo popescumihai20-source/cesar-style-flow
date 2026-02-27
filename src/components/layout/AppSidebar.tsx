@@ -37,7 +37,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div>
-              <h1 className="font-display text-lg font-bold text-gold-gradient leading-tight">Cesar's</h1>
+              <h1 className="font-parkavenue text-2xl text-gold-gradient leading-tight">Cesar's</h1>
               <p className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Retail System</p>
             </div>
           )}
