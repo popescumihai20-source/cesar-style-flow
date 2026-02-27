@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { Truck, Plus, Trash2, Search, Save, CheckCircle } from "lucide-react";
+import { Truck, Plus, Trash2, Search, Save, CheckCircle, Camera } from "lucide-react";
+import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode } from "@/lib/barcode-parser";
@@ -30,6 +31,7 @@ export default function Receptie() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRowId, setSearchRowId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scannerRowId, setScannerRowId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -216,6 +218,9 @@ export default function Receptie() {
                       <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => openSearchForRow(row.id)}>
                         <Search className="h-3 w-3" />
                       </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setScannerRowId(row.id)}>
+                        <Camera className="h-3 w-3" />
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{row.productName || <span className="text-muted-foreground">—</span>}</TableCell>
@@ -269,6 +274,16 @@ export default function Receptie() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Camera scanner */}
+      <BarcodeScanner
+        open={!!scannerRowId}
+        onClose={() => setScannerRowId(null)}
+        onScan={(barcode) => {
+          if (scannerRowId) {
+            handleBarcodeScan(scannerRowId, barcode);
+          }
+        }}
+      />
     </div>
   );
 }
