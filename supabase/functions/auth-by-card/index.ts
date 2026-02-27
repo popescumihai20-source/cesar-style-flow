@@ -20,8 +20,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("Missing env vars:", { hasUrl: !!supabaseUrl, hasKey: !!serviceRoleKey });
+      return new Response(
+        JSON.stringify({ error: "Configurare server lipsă" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -59,7 +67,7 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
-        // User might already exist (from a previous attempt)
+        // User might already exist
         const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = listData?.users?.find((u: any) => u.email === email);
         if (existingUser) {
@@ -78,33 +86,72 @@ Deno.serve(async (req) => {
         .eq("id", employee.id);
 
       // Assign casier role by default
-      const { error: roleError } = await supabaseAdmin
+      await supabaseAdmin
         .from("user_roles")
         .upsert({ user_id: userId, role: "casier" }, { onConflict: "user_id,role" });
-      
-      if (roleError) {
-        console.log("Role assignment note:", roleError.message);
-      }
     }
 
-    // Sign in with email/password
-    const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
-    const supabaseAnon = createClient(supabaseUrl, anonKey);
+    // Sign in - use service role client to sign in on behalf of user
+    // First ensure password is set correctly
+    await supabaseAdmin.auth.admin.updateUserById(userId!, { password });
 
-    let signInResult = await supabaseAnon.auth.signInWithPassword({ email, password });
-
-    // If sign-in fails (password mismatch from old creation), reset password and retry
-    if (signInResult.error) {
-      // Update user password using admin API
-      const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId!, {
-        password,
+    // Create a new anon client for sign-in using the service role key to get anon key
+    // Actually, we can use signInWithPassword via admin client workaround:
+    // Use a fresh client with the anon key
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+    
+    if (!anonKey) {
+      // Fallback: generate session directly via admin
+      const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
       });
-      if (updateErr) throw updateErr;
+      
+      if (sessionError) throw sessionError;
 
-      // Retry sign in
-      signInResult = await supabaseAnon.auth.signInWithPassword({ email, password });
-      if (signInResult.error) throw signInResult.error;
+      // Use admin to create a session directly
+      // Sign in with password using the admin client's underlying fetch
+      const signInResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": serviceRoleKey,
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const signInData = await signInResponse.json();
+
+      if (!signInResponse.ok) {
+        throw new Error(signInData.error_description || signInData.msg || "Sign in failed");
+      }
+
+      // Fetch roles
+      const { data: roles } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+
+      return new Response(
+        JSON.stringify({
+          session: {
+            access_token: signInData.access_token,
+            refresh_token: signInData.refresh_token,
+          },
+          employee: { id: employee.id, name: employee.name },
+          roles: (roles || []).map((r: any) => r.role),
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    const supabaseAnon = createClient(supabaseUrl, anonKey);
+    const { data: signInData, error: signInError } = await supabaseAnon.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) throw signInError;
 
     // Fetch roles
     const { data: roles } = await supabaseAdmin
@@ -114,7 +161,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        session: signInResult.data.session,
+        session: signInData.session,
         employee: { id: employee.id, name: employee.name },
         roles: (roles || []).map((r: any) => r.role),
       }),
