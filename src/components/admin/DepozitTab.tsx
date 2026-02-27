@@ -111,18 +111,18 @@ export default function DepozitTab() {
                   {(searchTerm ? products.filter((p: any) =>
                     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     p.base_id.toLowerCase().includes(searchTerm.toLowerCase())
-                  ) : allDepozitProducts).map((p: any) => (
+                  ) : products.filter((p: any) => p.active)).map((p: any) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
                       <TableCell>{p.name}</TableCell>
-                      <TableCell className="text-right font-mono font-bold">{p.stock_depozit}</TableCell>
+                      <TableCell className={`text-right font-mono font-bold ${p.stock_depozit > 0 ? "" : "text-muted-foreground"}`}>{p.stock_depozit}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                     </TableRow>
                   ))}
-                  {allDepozitProducts.length === 0 && !searchTerm && (
+                  {products.filter((p: any) => p.active).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                        Niciun produs în depozit
+                        Niciun produs activ
                       </TableCell>
                     </TableRow>
                   )}
