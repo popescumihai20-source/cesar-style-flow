@@ -26,6 +26,7 @@ interface ReceiptRow {
   dataReceptie: string;
   sellingPrice: number;
   costPrice: number;
+  quantity: number;
 }
 
 function buildBaseId(articol: string, model: string, producator: string, permanent: boolean): string {
@@ -67,7 +68,7 @@ export default function Receptie() {
     setRows(prev => [...prev, {
       id: crypto.randomUUID(),
       articolCode: "", modelCode: "", producatorCode: "",
-      permanent: true, dataReceptie: "", sellingPrice: 0, costPrice: 0,
+      permanent: true, dataReceptie: "", sellingPrice: 0, costPrice: 0, quantity: 1,
     }]);
   }, []);
 
@@ -87,6 +88,7 @@ export default function Receptie() {
         dataReceptie: er.data,
         sellingPrice: er.pretVanzare,
         costPrice: er.pretAchizitie,
+        quantity: 1,
       };
     });
     setRows(prev => [...prev, ...newRows]);
@@ -129,7 +131,7 @@ export default function Receptie() {
 
         if (existing) {
           await supabase.from("products").update({
-            stock_general: existing.stock_general + 1,
+            stock_general: existing.stock_general + row.quantity,
             cost_price: row.costPrice,
             selling_price: row.sellingPrice,
             last_received_at: new Date().toISOString(),
@@ -148,7 +150,7 @@ export default function Receptie() {
               name: `${artName} ${colorName} ${prodName}`,
               cost_price: row.costPrice,
               selling_price: row.sellingPrice,
-              stock_general: 1,
+              stock_general: row.quantity,
               active: true,
               last_received_at: new Date().toISOString(),
             })
@@ -161,7 +163,7 @@ export default function Receptie() {
         await supabase.from("stock_receipt_items").insert({
           receipt_id: receipt.id,
           product_id: productId,
-          quantity: 1,
+          quantity: row.quantity,
           cost_price: row.costPrice,
         });
       }
@@ -206,6 +208,7 @@ export default function Receptie() {
                 <TableHead className="w-40">Model / Culoare</TableHead>
                 <TableHead className="w-40">Producător</TableHead>
                 <TableHead className="w-28">Data</TableHead>
+                <TableHead className="text-right w-20">Cant.</TableHead>
                 <TableHead className="text-right w-28">Preț Vânzare</TableHead>
                 <TableHead className="text-right w-28">Preț Achiziție</TableHead>
                 <TableHead className="w-36">Cod Bare</TableHead>
@@ -268,6 +271,9 @@ export default function Receptie() {
                       <Input value={row.dataReceptie} onChange={e => updateRow(row.id, { dataReceptie: e.target.value })} className="h-8 w-28 text-xs" placeholder="27/02/2026" />
                     </TableCell>
                     <TableCell>
+                      <Input type="number" value={row.quantity} onChange={e => updateRow(row.id, { quantity: parseInt(e.target.value) || 1 })} min={1} className="h-8 w-16 text-right text-sm" />
+                    </TableCell>
+                    <TableCell>
                       <Input type="number" value={row.sellingPrice} onChange={e => updateRow(row.id, { sellingPrice: parseFloat(e.target.value) || 0 })} className="h-8 text-right text-sm" />
                     </TableCell>
                     <TableCell>
@@ -286,7 +292,7 @@ export default function Receptie() {
               })}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     Importă un fișier Excel sau apasă "Adaugă Rând" pentru a începe recepția
                   </TableCell>
                 </TableRow>
