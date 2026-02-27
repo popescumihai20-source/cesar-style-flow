@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse } from "lucide-react";
+import DepozitTab from "@/components/admin/DepozitTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,6 +144,7 @@ export default function Admin() {
           <TabsTrigger value="employees">Angajați</TabsTrigger>
           <TabsTrigger value="devices">Dispozitive</TabsTrigger>
           <TabsTrigger value="buline">Buline</TabsTrigger>
+          <TabsTrigger value="depozit"><Warehouse className="h-3 w-3 mr-1" />Depozit</TabsTrigger>
         </TabsList>
 
         {/* Sales tab */}
@@ -321,6 +323,10 @@ export default function Admin() {
               </Table>
             </div>
           </Card>
+        </TabsContent>
+        {/* Depozit tab */}
+        <TabsContent value="depozit">
+          <DepozitTab />
         </TabsContent>
       </Tabs>
     </div>
