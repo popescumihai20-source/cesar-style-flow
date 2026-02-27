@@ -259,8 +259,10 @@ export default function Produse() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(p => (
-                    <TableRow key={p.id}>
+                  {filtered.map(p => {
+                    const isZeroStock = p.stock_general <= 0;
+                    return (
+                    <TableRow key={p.id} className={isZeroStock ? "opacity-60" : ""}>
                       <TableCell>
                         {p.images && p.images.length > 0 ? (
                           <img src={p.images[0]} alt={p.name} className="h-8 w-8 rounded object-cover" />
@@ -270,13 +272,18 @@ export default function Produse() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>{p.category || "—"}</TableCell>
-                      <TableCell>{p.brand || "—"}</TableCell>
-                      <TableCell className="text-right font-mono">{p.selling_price.toFixed(2)}</TableCell>
-                      <TableCell className={`text-right font-mono ${p.stock_general <= 0 ? "text-destructive" : ""}`}>{p.stock_general}</TableCell>
-                      <TableCell><Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge></TableCell>
+                      <TableCell className={`font-mono text-xs ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.base_id}</TableCell>
+                      <TableCell className={`font-medium ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.brand || "—"}</TableCell>
+                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.selling_price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge>
+                          {isZeroStock && <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border px-1.5 py-0">Stoc 0</Badge>}
+                        </div>
+                      </TableCell>
                       <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -286,7 +293,8 @@ export default function Produse() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {filtered.length === 0 && (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Niciun produs găsit</TableCell></TableRow>
                   )}
@@ -323,16 +331,24 @@ export default function Produse() {
                   {products.filter((p: any) => {
                     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search)) return false;
                     return p.active;
-                  }).map((p: any) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>{p.category || "—"}</TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${(p as any).stock_depozit > 0 ? "" : "text-muted-foreground"}`}>{(p as any).stock_depozit ?? 0}</TableCell>
+                  }).map((p: any) => {
+                    const isZeroDepozit = (p.stock_depozit ?? 0) <= 0;
+                    return (
+                    <TableRow key={p.id} className={isZeroDepozit ? "opacity-60" : ""}>
+                      <TableCell className={`font-mono text-xs ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.base_id}</TableCell>
+                      <TableCell className={`font-medium ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
+                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
+                      <TableCell className={`text-right font-mono font-bold ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.stock_depozit ?? 0}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
-                      <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}
+                          {isZeroDepozit && <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border px-1.5 py-0">Stoc 0</Badge>}
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
