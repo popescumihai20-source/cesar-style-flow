@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Package, Plus, Search, Filter, Edit, Trash2, Eye, ChevronDown, Store, Warehouse } from "lucide-react";
+import { useState, useRef } from "react";
+import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ProductVariantsEditor } from "@/components/products/ProductVariantsEditor";
 
@@ -32,10 +31,14 @@ export default function Produse() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showVariants, setShowVariants] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Form state
   const [form, setForm] = useState({
     base_id: "", name: "", category: "", brand: "",
     selling_price: 0, cost_price: 0, stock_general: 0,
@@ -60,8 +63,22 @@ export default function Produse() {
     return true;
   });
 
+  const uploadImages = async (productId: string): Promise<string[]> => {
+    const urls: string[] = [];
+    for (const file of imageFiles) {
+      const ext = file.name.split(".").pop();
+      const path = `${productId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
+      urls.push(urlData.publicUrl);
+    }
+    return urls;
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
+      setIsUploading(true);
       const payload = {
         base_id: data.base_id,
         name: data.name,
@@ -72,13 +89,24 @@ export default function Produse() {
         stock_general: data.stock_general,
         seasonal_tag: data.seasonal_tag as any,
         tags: data.tags ? data.tags.split(",").map(t => t.trim()) : [],
+        images: existingImages,
       };
+
       if (editingProduct) {
+        // Upload new images
+        if (imageFiles.length > 0) {
+          const newUrls = await uploadImages(editingProduct.id);
+          payload.images = [...existingImages, ...newUrls];
+        }
         const { error } = await supabase.from("products").update(payload).eq("id", editingProduct.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("products").insert(payload);
+        const { data: newProd, error } = await supabase.from("products").insert(payload).select().single();
         if (error) throw error;
+        if (imageFiles.length > 0) {
+          const newUrls = await uploadImages(newProd.id);
+          await supabase.from("products").update({ images: newUrls }).eq("id", newProd.id);
+        }
       }
     },
     onSuccess: () => {
@@ -87,10 +115,14 @@ export default function Produse() {
       toast({ title: editingProduct ? "Produs actualizat" : "Produs creat" });
       setShowForm(false);
       setEditingProduct(null);
+      setImageFiles([]);
+      setImagePreviews([]);
+      setExistingImages([]);
     },
     onError: (err: any) => {
       toast({ title: "Eroare", description: err.message, variant: "destructive" });
     },
+    onSettled: () => setIsUploading(false),
   });
 
   const deleteMutation = useMutation({
@@ -107,6 +139,9 @@ export default function Produse() {
   const openCreate = () => {
     setEditingProduct(null);
     setForm({ base_id: "", name: "", category: "", brand: "", selling_price: 0, cost_price: 0, stock_general: 0, seasonal_tag: "permanent", tags: "" });
+    setImageFiles([]);
+    setImagePreviews([]);
+    setExistingImages([]);
     setShowForm(true);
   };
 
@@ -118,7 +153,29 @@ export default function Produse() {
       stock_general: p.stock_general, seasonal_tag: p.seasonal_tag,
       tags: (p.tags || []).join(", "),
     });
+    setExistingImages(p.images || []);
+    setImageFiles([]);
+    setImagePreviews([]);
     setShowForm(true);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setImageFiles(prev => [...prev, ...files]);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreviews(prev => [...prev, reader.result as string]);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeExistingImage = (url: string) => {
+    setExistingImages(prev => prev.filter(u => u !== url));
+  };
+
+  const removeNewImage = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const exportCSV = () => {
@@ -127,8 +184,7 @@ export default function Produse() {
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "produse.csv"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "produse.csv"; a.click();
   };
 
   return (
@@ -147,95 +203,99 @@ export default function Produse() {
         </div>
       </div>
 
-      {/* Gestiuni Tabs */}
       <Tabs defaultValue="magazin" className="space-y-4">
         <TabsList>
           <TabsTrigger value="magazin" className="gap-1.5"><Store className="h-3.5 w-3.5" />Magazin Ferdinand</TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5"><Warehouse className="h-3.5 w-3.5" />Depozit</TabsTrigger>
         </TabsList>
 
-        {/* Magazin Ferdinand */}
         <TabsContent value="magazin" className="space-y-4">
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-3 p-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Caută produs..." className="pl-9 h-9" />
+              </div>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Categorie" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toate categoriile</SelectItem>
+                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={seasonFilter} onValueChange={setSeasonFilter}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Sezon" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toate sezoanele</SelectItem>
+                  {SEASONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={activeFilter} onValueChange={setActiveFilter}>
+                <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toate</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 p-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Caută produs..." className="pl-9 h-9" />
-          </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Categorie" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toate categoriile</SelectItem>
-              {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={seasonFilter} onValueChange={setSeasonFilter}>
-            <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Sezon" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toate sezoanele</SelectItem>
-              {SEASONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={activeFilter} onValueChange={setActiveFilter}>
-            <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toate</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* Product table */}
-      <Card>
-        <div className="overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cod</TableHead>
-                <TableHead>Nume</TableHead>
-                <TableHead>Categorie</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead className="text-right">Preț</TableHead>
-                <TableHead className="text-right">Stoc</TableHead>
-                <TableHead>Sezon</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Acțiuni</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>{p.category || "—"}</TableCell>
-                  <TableCell>{p.brand || "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{p.selling_price.toFixed(2)}</TableCell>
-                  <TableCell className={`text-right font-mono ${p.stock_general <= 0 ? "text-destructive" : ""}`}>{p.stock_general}</TableCell>
-                  <TableCell><Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge></TableCell>
-                  <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowVariants(p.id)}><Eye className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}><Edit className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(p.id)}><Trash2 className="h-3 w-3" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Niciun produs găsit</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+          <Card>
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>Cod</TableHead>
+                    <TableHead>Nume</TableHead>
+                    <TableHead>Categorie</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead className="text-right">Preț</TableHead>
+                    <TableHead className="text-right">Stoc</TableHead>
+                    <TableHead>Sezon</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Acțiuni</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell>
+                        {p.images && p.images.length > 0 ? (
+                          <img src={p.images[0]} alt={p.name} className="h-8 w-8 rounded object-cover" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                            <ImageIcon className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>{p.category || "—"}</TableCell>
+                      <TableCell>{p.brand || "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{p.selling_price.toFixed(2)}</TableCell>
+                      <TableCell className={`text-right font-mono ${p.stock_general <= 0 ? "text-destructive" : ""}`}>{p.stock_general}</TableCell>
+                      <TableCell><Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge></TableCell>
+                      <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowVariants(p.id)}><Eye className="h-3 w-3" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}><Edit className="h-3 w-3" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(p.id)}><Trash2 className="h-3 w-3" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filtered.length === 0 && (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Niciun produs găsit</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         </TabsContent>
 
-        {/* Depozit */}
         <TabsContent value="depozit" className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
@@ -282,7 +342,7 @@ export default function Produse() {
 
       {/* Create/Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingProduct ? "Editare Produs" : "Produs Nou"}</DialogTitle>
           </DialogHeader>
@@ -316,11 +376,38 @@ export default function Produse() {
               </div>
               <div><Label>Taguri (separate prin virgulă)</Label><Input value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} /></div>
             </div>
+
+            {/* Image upload */}
+            <div>
+              <Label>Imagini produs</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {existingImages.map((url, i) => (
+                  <div key={`existing-${i}`} className="relative h-16 w-16 rounded border border-border overflow-hidden group">
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button onClick={() => removeExistingImage(url)} className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-bl p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {imagePreviews.map((preview, i) => (
+                  <div key={`new-${i}`} className="relative h-16 w-16 rounded border border-primary/50 overflow-hidden group">
+                    <img src={preview} alt="" className="h-full w-full object-cover" />
+                    <button onClick={() => removeNewImage(i)} className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-bl p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => fileInputRef.current?.click()} className="h-16 w-16 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50 transition-colors">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Anulează</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Se salvează..." : "Salvează"}
+            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || isUploading}>
+              {saveMutation.isPending || isUploading ? "Se salvează..." : "Salvează"}
             </Button>
           </DialogFooter>
         </DialogContent>

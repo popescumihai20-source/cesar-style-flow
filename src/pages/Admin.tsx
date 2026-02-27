@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -10,18 +10,26 @@ import ArticolDictionaryTab from "@/components/admin/ArticolDictionaryTab";
 import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
 import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Admin() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [fiscalInput, setFiscalInput] = useState("");
+
   const { data: sales = [] } = useQuery({
     queryKey: ["admin-sales"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("*").order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("sales").select("*, employees:cashier_employee_id(name)").order("created_at", { ascending: false }).limit(100);
       if (error) throw error;
       return data;
     },
@@ -34,6 +42,35 @@ export default function Admin() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Sale items for detail view
+  const { data: saleItems = [] } = useQuery({
+    queryKey: ["sale-items", selectedSale?.id],
+    queryFn: async () => {
+      if (!selectedSale) return [];
+      const { data, error } = await supabase.from("sale_items").select("*, products(name, base_id)").eq("sale_id", selectedSale.id);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!selectedSale,
+  });
+
+  const fiscalMutation = useMutation({
+    mutationFn: async ({ saleId, receipt }: { saleId: string; receipt: string }) => {
+      const { error } = await supabase.from("sales").update({
+        fiscal_receipt_number: receipt,
+        status: "fiscalizat" as const,
+      }).eq("id", saleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sales"] });
+      toast({ title: "Bon fiscal înregistrat" });
+      setSelectedSale(null);
+      setFiscalInput("");
+    },
+    onError: (err: any) => toast({ title: "Eroare", description: err.message, variant: "destructive" }),
   });
 
   const now = new Date();
@@ -137,7 +174,7 @@ export default function Admin() {
           <Card>
             <CardHeader className="flex-row items-center justify-between pb-2">
               <CardTitle className="text-base">Ultimele vânzări</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => exportTable("vanzari", ["ID", "Total", "Status", "Plata", "Data"], sales.map(s => [s.internal_id, s.total, s.status, s.payment_method, s.created_at]))}>
+              <Button variant="outline" size="sm" onClick={() => exportTable("vanzari", ["ID", "Total", "Status", "Plata", "Casier", "Data"], sales.map(s => [s.internal_id, s.total, s.status, s.payment_method, (s as any).employees?.name || "—", s.created_at]))}>
                 <FileDown className="h-3 w-3 mr-1" />Export
               </Button>
             </CardHeader>
@@ -149,25 +186,33 @@ export default function Admin() {
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Plată</TableHead>
+                    <TableHead>Casier</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead className="text-right">Acțiuni</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sales.slice(0, 20).map(s => (
+                  {sales.slice(0, 30).map(s => (
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-sm">{s.internal_id}</TableCell>
                       <TableCell className="text-right font-mono">{s.total.toFixed(2)} RON</TableCell>
                       <TableCell>
-                        <Badge variant={s.status === "fiscalizat" ? "default" : "secondary"} className="text-xs">
+                        <Badge variant={s.status === "fiscalizat" ? "default" : s.status === "anulat" ? "destructive" : "secondary"} className="text-xs">
                           {s.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="capitalize">{s.payment_method}</TableCell>
+                      <TableCell className="text-sm">{(s as any).employees?.name || "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString("ro-RO")}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSelectedSale(s); setFiscalInput(s.fiscal_receipt_number || ""); }}>
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {sales.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nicio vânzare</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nicio vânzare</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -175,10 +220,7 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
-        {/* Reports tab */}
-        <TabsContent value="reports">
-          <ReportsTab />
-        </TabsContent>
+        <TabsContent value="reports"><ReportsTab /></TabsContent>
 
         {/* Stock tab */}
         <TabsContent value="stock">
@@ -226,6 +268,86 @@ export default function Admin() {
         <TabsContent value="barcode-gen"><BarcodeGeneratorTab /></TabsContent>
         <TabsContent value="settings"><StockPinSettingsTab /></TabsContent>
       </Tabs>
+
+      {/* Sale detail dialog */}
+      <Dialog open={!!selectedSale} onOpenChange={(open) => { if (!open) setSelectedSale(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalii Vânzare — {selectedSale?.internal_id}</DialogTitle>
+          </DialogHeader>
+          {selectedSale && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Total:</span> <span className="font-mono font-bold">{selectedSale.total.toFixed(2)} RON</span></div>
+                <div><span className="text-muted-foreground">Reduceri:</span> <span className="font-mono">{selectedSale.discount_total.toFixed(2)} RON</span></div>
+                <div><span className="text-muted-foreground">Plată:</span> <span className="capitalize">{selectedSale.payment_method}</span></div>
+                <div><span className="text-muted-foreground">Status:</span> <Badge variant={selectedSale.status === "fiscalizat" ? "default" : "secondary"} className="text-xs ml-1">{selectedSale.status}</Badge></div>
+                <div><span className="text-muted-foreground">Casier:</span> {(selectedSale as any).employees?.name || "—"}</div>
+                <div><span className="text-muted-foreground">Data:</span> {new Date(selectedSale.created_at).toLocaleString("ro-RO")}</div>
+                {selectedSale.cash_amount != null && <div><span className="text-muted-foreground">Numerar:</span> <span className="font-mono">{selectedSale.cash_amount.toFixed(2)}</span></div>}
+                {selectedSale.card_amount != null && <div><span className="text-muted-foreground">Card:</span> <span className="font-mono">{selectedSale.card_amount.toFixed(2)}</span></div>}
+              </div>
+
+              {/* Sale items */}
+              <div>
+                <p className="text-sm font-medium mb-2">Articole</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produs</TableHead>
+                      <TableHead className="text-right">Cant.</TableHead>
+                      <TableHead className="text-right">Preț</TableHead>
+                      <TableHead className="text-right">Reducere</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {saleItems.map((si: any) => (
+                      <TableRow key={si.id}>
+                        <TableCell className="text-sm">
+                          {si.products?.name || si.product_id}
+                          {si.is_gift && <Badge className="ml-1 text-xs bg-primary/20 text-primary">Cadou</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{si.quantity}</TableCell>
+                        <TableCell className="text-right font-mono">{si.unit_price.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{si.discount_percent > 0 ? `-${si.discount_percent}%` : "—"}</TableCell>
+                        <TableCell className="text-right font-mono font-medium">{si.line_total.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Fiscal receipt input */}
+              {selectedSale.status === "pending_fiscal" && (
+                <div className="border-t border-border pt-3 space-y-2">
+                  <p className="text-sm font-medium">Bon Fiscal</p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={fiscalInput}
+                      onChange={e => setFiscalInput(e.target.value)}
+                      placeholder="Nr. bon fiscal..."
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={() => fiscalMutation.mutate({ saleId: selectedSale.id, receipt: fiscalInput })}
+                      disabled={!fiscalInput.trim() || fiscalMutation.isPending}
+                    >
+                      <Receipt className="h-4 w-4 mr-1" />
+                      {fiscalMutation.isPending ? "..." : "Fiscalizează"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {selectedSale.fiscal_receipt_number && (
+                <div className="border-t border-border pt-3">
+                  <p className="text-sm"><span className="text-muted-foreground">Bon fiscal:</span> <span className="font-mono font-medium">{selectedSale.fiscal_receipt_number}</span></p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
