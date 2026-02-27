@@ -264,6 +264,162 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_adjustments: {
+        Row: {
+          adjusted_by: string
+          created_at: string
+          difference: number
+          id: string
+          location: string
+          new_quantity: number
+          old_quantity: number
+          product_id: string
+          reason: string
+          session_id: string
+          variant_code: string | null
+        }
+        Insert: {
+          adjusted_by: string
+          created_at?: string
+          difference: number
+          id?: string
+          location: string
+          new_quantity: number
+          old_quantity: number
+          product_id: string
+          reason: string
+          session_id: string
+          variant_code?: string | null
+        }
+        Update: {
+          adjusted_by?: string
+          created_at?: string
+          difference?: number
+          id?: string
+          location?: string
+          new_quantity?: number
+          old_quantity?: number
+          product_id?: string
+          reason?: string
+          session_id?: string
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_adjustments_adjusted_by_fkey"
+            columns: ["adjusted_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_lines: {
+        Row: {
+          adjustment_reason: string | null
+          counted_quantity: number
+          created_at: string
+          difference: number | null
+          id: string
+          product_id: string
+          session_id: string
+          system_quantity: number
+          variant_code: string | null
+        }
+        Insert: {
+          adjustment_reason?: string | null
+          counted_quantity?: number
+          created_at?: string
+          difference?: number | null
+          id?: string
+          product_id: string
+          session_id: string
+          system_quantity?: number
+          variant_code?: string | null
+        }
+        Update: {
+          adjustment_reason?: string | null
+          counted_quantity?: number
+          created_at?: string
+          difference?: number | null
+          id?: string
+          product_id?: string
+          session_id?: string
+          system_quantity?: number
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_lines_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_sessions: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          location: string
+          notes: string | null
+          start_time: string
+          started_by: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          location: string
+          notes?: string | null
+          start_time?: string
+          started_by: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          location?: string
+          notes?: string | null
+          start_time?: string
+          started_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_sessions_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       producator_dictionary: {
         Row: {
           active: boolean

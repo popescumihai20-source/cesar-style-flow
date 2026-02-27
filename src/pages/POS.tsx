@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Lock } from "lucide-react";
+import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Lock, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
+import { useInventoryLock } from "@/hooks/use-inventory-lock";
 import { Product } from "@/types/pos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,7 +54,7 @@ export default function POS() {
   const scanInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { getArticolLabel } = useArticolDictionary();
-
+  const { isLocked: isMagazinLocked } = useInventoryLock("magazin");
   // PIN login state
   const [pendingEmployee, setPendingEmployee] = useState<any>(null);
   const [showPinLogin, setShowPinLogin] = useState(false);
@@ -386,6 +387,17 @@ export default function POS() {
           </div>
         </div>
 
+        {/* Inventory lock warning */}
+        {isMagazinLocked && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <ShieldAlert className="h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-medium">Inventariere în curs — Magazin</p>
+              <p className="text-xs text-muted-foreground">Vânzările sunt blocate până la finalizarea inventarierii.</p>
+            </div>
+          </div>
+        )}
+
         {/* Cart items */}
         <div className="flex-1 overflow-auto space-y-2">
           {cart.length === 0 ? (
@@ -523,8 +535,8 @@ export default function POS() {
         <div className="mt-auto space-y-2">
           {mode === "casier" && cart.length > 0 && (
             <>
-              <Button className="w-full h-14 text-lg font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting}>
-                <CheckCircle className="h-5 w-5 mr-2" />Finalizare în Sistem
+              <Button className="w-full h-14 text-lg font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
+                {isMagazinLocked ? <><ShieldAlert className="h-5 w-5 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-5 w-5 mr-2" />Finalizare în Sistem</>}
               </Button>
               <Button variant="destructive" className="w-full" onClick={resetToPublic}>
                 <X className="h-4 w-4 mr-2" />Anulare Vânzare
