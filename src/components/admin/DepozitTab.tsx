@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useInventoryLock } from "@/hooks/use-inventory-lock";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Package, ArrowRightLeft, Truck, PackageMinus, Plus, Minus } from "lucide-react";
+import { Package, ArrowRightLeft, Truck, PackageMinus, Plus, Minus, ShieldAlert } from "lucide-react";
 
 export default function DepozitTab() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const { isLocked: isDepozitLocked } = useInventoryLock("depozit");
+  const { isLocked: isMagazinLocked } = useInventoryLock("magazin");
 
   // Fetch products with depozit stock
   const { data: products = [] } = useQuery({
@@ -139,12 +142,24 @@ export default function DepozitTab() {
 
         {/* Transfer */}
         <TabsContent value="transfer">
-          <TransferDepozit products={products} queryClient={queryClient} />
+          {(isDepozitLocked || isMagazinLocked) && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive mb-4">
+              <ShieldAlert className="h-5 w-5 shrink-0" />
+              <p className="font-medium">Transferurile sunt blocate — inventariere în curs ({isDepozitLocked ? "Depozit" : "Magazin"})</p>
+            </div>
+          )}
+          <TransferDepozit products={products} queryClient={queryClient} locked={isDepozitLocked || isMagazinLocked} />
         </TabsContent>
 
         {/* Scoatere */}
         <TabsContent value="scoatere">
-          <ScoatereDepozit products={products} queryClient={queryClient} />
+          {isDepozitLocked && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive mb-4">
+              <ShieldAlert className="h-5 w-5 shrink-0" />
+              <p className="font-medium">Scoaterile sunt blocate — inventariere depozit în curs</p>
+            </div>
+          )}
+          <ScoatereDepozit products={products} queryClient={queryClient} locked={isDepozitLocked} />
         </TabsContent>
       </Tabs>
     </div>
@@ -225,7 +240,7 @@ function ReceptieDepozit({ products, queryClient }: { products: any[]; queryClie
   );
 }
 
-function TransferDepozit({ products, queryClient }: { products: any[]; queryClient: any }) {
+function TransferDepozit({ products, queryClient, locked = false }: { products: any[]; queryClient: any; locked?: boolean }) {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [direction, setDirection] = useState("depozit_to_magazin");
@@ -316,7 +331,7 @@ function TransferDepozit({ products, queryClient }: { products: any[]; queryClie
           </Select>
           <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} placeholder="Cantitate" />
         </div>
-        <Button onClick={handleTransfer} disabled={!selectedProduct || quantity <= 0 || loading}>
+        <Button onClick={handleTransfer} disabled={!selectedProduct || quantity <= 0 || loading || locked}>
           <ArrowRightLeft className="h-4 w-4 mr-1" />Transferă
         </Button>
       </CardContent>
@@ -324,7 +339,7 @@ function TransferDepozit({ products, queryClient }: { products: any[]; queryClie
   );
 }
 
-function ScoatereDepozit({ products, queryClient }: { products: any[]; queryClient: any }) {
+function ScoatereDepozit({ products, queryClient, locked = false }: { products: any[]; queryClient: any; locked?: boolean }) {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [reason, setReason] = useState("");
@@ -395,7 +410,7 @@ function ScoatereDepozit({ products, queryClient }: { products: any[]; queryClie
           <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} placeholder="Cantitate" />
           <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motiv (opțional)" />
         </div>
-        <Button variant="destructive" onClick={handleScoatere} disabled={!selectedProduct || quantity <= 0 || loading}>
+        <Button variant="destructive" onClick={handleScoatere} disabled={!selectedProduct || quantity <= 0 || loading || locked}>
           <Minus className="h-4 w-4 mr-1" />Scoate din Depozit
         </Button>
       </CardContent>
