@@ -232,8 +232,9 @@ export type Database = {
           employee_card_code: string
           id: string
           name: string
-          pin_login: string | null
-          removal_pin: string | null
+          pin_login: string
+          removal_pin: string
+          role: string
           updated_at: string
           user_id: string | null
         }
@@ -243,8 +244,9 @@ export type Database = {
           employee_card_code: string
           id?: string
           name: string
-          pin_login?: string | null
-          removal_pin?: string | null
+          pin_login: string
+          removal_pin: string
+          role?: string
           updated_at?: string
           user_id?: string | null
         }
@@ -254,8 +256,9 @@ export type Database = {
           employee_card_code?: string
           id?: string
           name?: string
-          pin_login?: string | null
-          removal_pin?: string | null
+          pin_login?: string
+          removal_pin?: string
+          role?: string
           updated_at?: string
           user_id?: string | null
         }
