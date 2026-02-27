@@ -84,7 +84,7 @@ export default function POS() {
         .select("*")
         .eq("employee_card_code", trimmed)
         .eq("active", true)
-        .single();
+        .maybeSingle();
 
       if (employee) {
         activateCashier(employee.id, employee.name);
