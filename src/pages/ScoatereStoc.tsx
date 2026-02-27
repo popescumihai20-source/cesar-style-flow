@@ -62,7 +62,7 @@ export default function ScoatereStoc() {
       .select("*")
       .eq("employee_card_code", cardInput.trim())
       .eq("active", true)
-      .single();
+      .maybeSingle();
     if (emp) {
       setEmployee(emp);
       setStep("pin");
