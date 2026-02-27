@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
+import BulineTab from "@/components/admin/BulineTab";
+import ReportsTab from "@/components/admin/ReportsTab";
+import CustomersTab from "@/components/admin/CustomersTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Admin() {
-  // Sales stats
   const { data: sales = [] } = useQuery({
     queryKey: ["admin-sales"],
     queryFn: async () => {
@@ -26,16 +28,6 @@ export default function Admin() {
     queryKey: ["products-admin"],
     queryFn: async () => {
       const { data, error } = await supabase.from("products").select("*").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-
-  const { data: buline = [] } = useQuery({
-    queryKey: ["admin-buline"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("bulina_commissions").select("*").order("color_name");
       if (error) throw error;
       return data;
     },
@@ -123,12 +115,14 @@ export default function Admin() {
       )}
 
       <Tabs defaultValue="sales" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="sales">Vânzări</TabsTrigger>
+          <TabsTrigger value="reports"><BarChart3 className="h-3 w-3 mr-1" />Rapoarte</TabsTrigger>
           <TabsTrigger value="stock">Stoc</TabsTrigger>
           <TabsTrigger value="employees">Angajați</TabsTrigger>
           <TabsTrigger value="devices">Dispozitive</TabsTrigger>
-          <TabsTrigger value="buline">Buline</TabsTrigger>
+          <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
+          <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
           <TabsTrigger value="depozit"><Warehouse className="h-3 w-3 mr-1" />Depozit</TabsTrigger>
         </TabsList>
 
@@ -175,6 +169,11 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
+        {/* Reports tab */}
+        <TabsContent value="reports">
+          <ReportsTab />
+        </TabsContent>
+
         {/* Stock tab */}
         <TabsContent value="stock">
           <Card>
@@ -212,51 +211,11 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
-        {/* Employees tab */}
-        <TabsContent value="employees">
-          <EmployeesTab />
-        </TabsContent>
-
-        {/* Devices tab */}
-        <TabsContent value="devices">
-          <DevicesTab />
-        </TabsContent>
-
-        {/* Buline tab */}
-        <TabsContent value="buline">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Buline Comision</CardTitle></CardHeader>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Culoare</TableHead>
-                    <TableHead>Comision</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {buline.map(b => (
-                    <TableRow key={b.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-4 w-4 rounded-full" style={{ backgroundColor: b.hex_color }} />
-                          {b.color_name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono">{b.commission_value.toFixed(2)} RON</TableCell>
-                      <TableCell>{b.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </TabsContent>
-        {/* Depozit tab */}
-        <TabsContent value="depozit">
-          <DepozitTab />
-        </TabsContent>
+        <TabsContent value="employees"><EmployeesTab /></TabsContent>
+        <TabsContent value="devices"><DevicesTab /></TabsContent>
+        <TabsContent value="buline"><BulineTab /></TabsContent>
+        <TabsContent value="customers"><CustomersTab /></TabsContent>
+        <TabsContent value="depozit"><DepozitTab /></TabsContent>
       </Tabs>
     </div>
   );
