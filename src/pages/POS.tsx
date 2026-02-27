@@ -243,12 +243,20 @@ export default function POS() {
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Decrement stock
+      // Decrement stock — fetch current stock from DB to avoid race conditions
       for (const item of cart) {
-        await supabase
+        const { data: currentProduct } = await supabase
           .from("products")
-          .update({ stock_general: item.product.stock_general - item.quantity })
-          .eq("id", item.product.id);
+          .select("stock_general")
+          .eq("id", item.product.id)
+          .single();
+
+        if (currentProduct) {
+          await supabase
+            .from("products")
+            .update({ stock_general: currentProduct.stock_general - item.quantity })
+            .eq("id", item.product.id);
+        }
 
         if (item.variantCode) {
           const { data: variant } = await supabase
