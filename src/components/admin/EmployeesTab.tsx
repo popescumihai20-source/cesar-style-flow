@@ -10,12 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, FileDown, Shield, RefreshCw } from "lucide-react";
+import { Plus, Edit, Trash2, FileDown, RefreshCw } from "lucide-react";
 
-type AppRole = "admin" | "casier" | "depozit";
-const ALL_ROLES: AppRole[] = ["admin", "casier", "depozit"];
+type EmployeeRole = "admin" | "casier";
 
 const WEAK_PINS = ["0000","1111","2222","3333","4444","5555","6666","7777","8888","9999","1234","4321"];
 
@@ -45,11 +43,10 @@ function validatePin(pin: string, label: string): string | null {
 export default function EmployeesTab() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [showRoles, setShowRoles] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
-    role_prefix: "casier" as "admin" | "casier",
+    role: "casier" as EmployeeRole,
     pin_login: "",
     removal_pin: "",
     active: true,
@@ -64,18 +61,9 @@ export default function EmployeesTab() {
     },
   });
 
-  const { data: userRoles = [] } = useQuery({
-    queryKey: ["admin-user-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const getNextCardCode = (prefix: "admin" | "casier"): string => {
-    const startChar = prefix === "admin" ? "9" : "1";
-    const defaultStart = prefix === "admin" ? 9000001 : 1000001;
+  const getNextCardCode = (role: EmployeeRole): string => {
+    const startChar = role === "admin" ? "9" : "1";
+    const defaultStart = role === "admin" ? 9000001 : 1000001;
     const relevantCodes = employees
       .map(e => e.employee_card_code)
       .filter(c => c.startsWith(startChar) && /^\d{7}$/.test(c))
@@ -87,31 +75,30 @@ export default function EmployeesTab() {
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       // Validate pins
-      if (data.pin_login) {
-        const err = validatePin(data.pin_login, "PIN Login");
-        if (err) throw new Error(err);
-      }
-      if (data.removal_pin) {
-        const err = validatePin(data.removal_pin, "PIN Scoatere");
-        if (err) throw new Error(err);
-      }
-      if (data.pin_login && data.removal_pin && data.pin_login === data.removal_pin) {
+      const errLogin = validatePin(data.pin_login, "PIN Login");
+      if (errLogin) throw new Error(errLogin);
+      const errStock = validatePin(data.removal_pin, "PIN Scoatere");
+      if (errStock) throw new Error(errStock);
+      if (data.pin_login === data.removal_pin) {
         throw new Error("PIN Login și PIN Scoatere trebuie să fie diferite");
       }
 
       if (editingId) {
-        const payload: any = { name: data.name, active: data.active };
-        if (data.pin_login) payload.pin_login = data.pin_login;
-        if (data.removal_pin) payload.removal_pin = data.removal_pin;
-        const { error } = await supabase.from("employees").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("employees").update({
+          name: data.name,
+          pin_login: data.pin_login,
+          removal_pin: data.removal_pin,
+          active: data.active,
+        }).eq("id", editingId);
         if (error) throw error;
       } else {
-        const cardCode = getNextCardCode(data.role_prefix);
+        const cardCode = getNextCardCode(data.role);
         const { error } = await supabase.from("employees").insert({
           name: data.name,
           employee_card_code: cardCode,
-          pin_login: data.pin_login || null,
-          removal_pin: data.removal_pin || null,
+          role: data.role,
+          pin_login: data.pin_login,
+          removal_pin: data.removal_pin,
           active: data.active,
         });
         if (error) throw error;
@@ -138,34 +125,23 @@ export default function EmployeesTab() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const toggleRoleMutation = useMutation({
-    mutationFn: async ({ userId, role, hasRole }: { userId: string; role: AppRole; hasRole: boolean }) => {
-      if (hasRole) {
-        const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
-      toast.success("Rol actualizat");
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-
   const openCreate = () => {
     const { pinLogin, pinStock } = generatePinPair();
     setEditingId(null);
-    setForm({ name: "", role_prefix: "casier", pin_login: pinLogin, removal_pin: pinStock, active: true });
+    setForm({ name: "", role: "casier", pin_login: pinLogin, removal_pin: pinStock, active: true });
     setShowForm(true);
   };
 
   const openEdit = (e: any) => {
+    const { pinLogin, pinStock } = generatePinPair();
     setEditingId(e.id);
-    const prefix = e.employee_card_code?.startsWith("9") ? "admin" : "casier";
-    setForm({ name: e.name, role_prefix: prefix, pin_login: "", removal_pin: "", active: e.active });
+    setForm({
+      name: e.name,
+      role: e.role || "casier",
+      pin_login: pinLogin,
+      removal_pin: pinStock,
+      active: e.active,
+    });
     setShowForm(true);
   };
 
@@ -174,21 +150,14 @@ export default function EmployeesTab() {
     setForm(f => ({ ...f, pin_login: pinLogin, removal_pin: pinStock }));
   };
 
-  const getRolesForUser = (userId: string | null) => {
-    if (!userId) return [];
-    return userRoles.filter(r => r.user_id === userId).map(r => r.role);
-  };
-
   const exportCSV = () => {
-    const headers = ["Nume", "Card", "Activ"];
-    const rows = employees.map(e => [e.name, e.employee_card_code, e.active]);
+    const headers = ["Nume", "Rol", "Card", "Activ"];
+    const rows = employees.map(e => [e.name, (e as any).role || "casier", e.employee_card_code, e.active]);
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "angajati.csv"; a.click();
   };
-
-  const selectedEmployee = employees.find(e => e.id === showRoles);
 
   return (
     <>
@@ -209,53 +178,42 @@ export default function EmployeesTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nume</TableHead>
+                <TableHead>Rol</TableHead>
                 <TableHead>Cod Card</TableHead>
                 <TableHead>PIN Login</TableHead>
                 <TableHead>PIN Scoatere</TableHead>
-                <TableHead>Roluri</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Acțiuni</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map(e => {
-                const roles = getRolesForUser(e.user_id);
-                return (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-medium">{e.name}</TableCell>
-                    <TableCell className="font-mono">{e.employee_card_code}</TableCell>
-                    <TableCell className="font-mono text-muted-foreground">{(e as any).pin_login ? "••••" : "—"}</TableCell>
-                    <TableCell className="font-mono text-muted-foreground">{e.removal_pin ? "••••" : "—"}</TableCell>
-                    <TableCell>
-                      {roles.length > 0
-                        ? roles.map(r => <Badge key={r} variant="secondary" className="text-xs mr-1">{r}</Badge>)
-                        : <span className="text-xs text-muted-foreground">Fără rol</span>
-                      }
-                    </TableCell>
-                    <TableCell>
-                      {e.active
-                        ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge>
-                        : <Badge variant="secondary" className="text-xs">Inactiv</Badge>
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {e.user_id && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowRoles(e.id)} title="Roluri">
-                            <Shield className="h-3 w-3" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(e)}>
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(e.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {employees.map(e => (
+                <TableRow key={e.id}>
+                  <TableCell className="font-medium">{e.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-xs capitalize">{(e as any).role || "casier"}</Badge>
+                  </TableCell>
+                  <TableCell className="font-mono">{e.employee_card_code}</TableCell>
+                  <TableCell className="font-mono text-muted-foreground">••••</TableCell>
+                  <TableCell className="font-mono text-muted-foreground">••••</TableCell>
+                  <TableCell>
+                    {e.active
+                      ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge>
+                      : <Badge variant="secondary" className="text-xs">Inactiv</Badge>
+                    }
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(e)}>
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(e.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
               {employees.length === 0 && (
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Niciun angajat</TableCell></TableRow>
               )}
@@ -271,12 +229,12 @@ export default function EmployeesTab() {
             <DialogTitle>{editingId ? "Editare Angajat" : "Angajat Nou"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
-            <div><Label>Nume</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-            
-            {!editingId && (
+            <div><Label>Nume complet</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+
+            {!editingId ? (
               <div>
-                <Label>Tip (prefix cod card)</Label>
-                <Select value={form.role_prefix} onValueChange={(v: "admin" | "casier") => setForm({ ...form, role_prefix: v })}>
+                <Label>Rol</Label>
+                <Select value={form.role} onValueChange={(v: EmployeeRole) => setForm({ ...form, role: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="casier">Casier (1xxxxxx)</SelectItem>
@@ -284,21 +242,20 @@ export default function EmployeesTab() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Cod card generat automat: <span className="font-mono font-bold">{getNextCardCode(form.role_prefix)}</span>
+                  Cod card auto-generat: <span className="font-mono font-bold">{getNextCardCode(form.role)}</span>
                 </p>
               </div>
-            )}
-
-            {editingId && (
+            ) : (
               <div>
                 <Label>Cod Card</Label>
                 <Input value={employees.find(e => e.id === editingId)?.employee_card_code || ""} disabled className="font-mono bg-muted" />
+                <p className="text-xs text-muted-foreground mt-1">Rol: <span className="capitalize font-medium">{form.role}</span> — nu se poate schimba</p>
               </div>
             )}
 
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <Label>PIN Login (4 cifre){editingId && " — lasă gol pt. păstrare"}</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>PIN Login (4 cifre) *</Label>
                 <Input
                   value={form.pin_login}
                   onChange={e => setForm({ ...form, pin_login: e.target.value.replace(/\D/g, "").slice(0, 4) })}
@@ -307,8 +264,8 @@ export default function EmployeesTab() {
                   placeholder="••••"
                 />
               </div>
-              <div className="flex-1">
-                <Label>PIN Scoatere (4 cifre){editingId && " — lasă gol pt. păstrare"}</Label>
+              <div>
+                <Label>PIN Scoatere (4 cifre) *</Label>
                 <Input
                   value={form.removal_pin}
                   onChange={e => setForm({ ...form, removal_pin: e.target.value.replace(/\D/g, "").slice(0, 4) })}
@@ -329,38 +286,13 @@ export default function EmployeesTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Anulează</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !form.name}>
+            <Button
+              onClick={() => saveMutation.mutate(form)}
+              disabled={saveMutation.isPending || !form.name || form.pin_login.length !== 4 || form.removal_pin.length !== 4}
+            >
               {saveMutation.isPending ? "Se salvează..." : "Salvează"}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Roles Dialog */}
-      <Dialog open={!!showRoles} onOpenChange={() => setShowRoles(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Roluri — {selectedEmployee?.name}</DialogTitle>
-          </DialogHeader>
-          {selectedEmployee?.user_id && (
-            <div className="space-y-3">
-              {ALL_ROLES.map(role => {
-                const hasRole = getRolesForUser(selectedEmployee.user_id).includes(role);
-                return (
-                  <div key={role} className="flex items-center gap-3">
-                    <Checkbox
-                      checked={hasRole}
-                      onCheckedChange={() => toggleRoleMutation.mutate({ userId: selectedEmployee.user_id!, role, hasRole })}
-                    />
-                    <span className="capitalize font-medium">{role}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {!selectedEmployee?.user_id && (
-            <p className="text-sm text-muted-foreground">Angajatul nu s-a autentificat încă. Rolurile pot fi gestionate doar după prima autentificare.</p>
-          )}
         </DialogContent>
       </Dialog>
     </>

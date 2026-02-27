@@ -27,25 +27,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return new Response(
-        JSON.stringify({ error: "Configurare server lipsă" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Look up employee by card code
+    // Look up employee
     const { data: employee, error: empError } = await supabaseAdmin
       .from("employees")
       .select("*")
-      .eq("employee_card_code", card_code.trim())
+      .eq("employee_card_code", card_code)
       .eq("active", true)
       .maybeSingle();
 
@@ -59,19 +52,19 @@ Deno.serve(async (req) => {
     }
 
     // Validate pin_login
-    if (!employee.pin_login || employee.pin_login !== pin_login) {
+    if (employee.pin_login !== pin_login) {
       return new Response(
         JSON.stringify({ error: "PIN incorect" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const email = `emp_${card_code.trim()}@cesars.internal`;
-    const password = `cesars_pos_${card_code.trim()}_secure`;
-
+    const email = `emp_${card_code}@cesars.internal`;
+    const password = `cesars_pos_${card_code}_secure`;
     let userId = employee.user_id;
 
     if (!userId) {
+      // Create auth user
       const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -91,16 +84,13 @@ Deno.serve(async (req) => {
         userId = createData.user.id;
       }
 
-      await supabaseAdmin
-        .from("employees")
-        .update({ user_id: userId })
-        .eq("id", employee.id);
+      await supabaseAdmin.from("employees").update({ user_id: userId }).eq("id", employee.id);
 
-      // Assign role based on card prefix
-      const defaultRole = card_code.startsWith("9") ? "admin" : "casier";
+      // Assign role from employee.role
+      const appRole = employee.role === "admin" ? "admin" : "casier";
       await supabaseAdmin
         .from("user_roles")
-        .upsert({ user_id: userId, role: defaultRole }, { onConflict: "user_id,role" });
+        .upsert({ user_id: userId, role: appRole }, { onConflict: "user_id,role" });
     }
 
     // Sign in
@@ -108,15 +98,11 @@ Deno.serve(async (req) => {
 
     const signInResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": serviceRoleKey,
-      },
+      headers: { "Content-Type": "application/json", "apikey": serviceRoleKey },
       body: JSON.stringify({ email, password }),
     });
 
     const signInData = await signInResponse.json();
-
     if (!signInResponse.ok) {
       throw new Error(signInData.error_description || signInData.msg || "Sign in failed");
     }
@@ -129,11 +115,8 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        session: {
-          access_token: signInData.access_token,
-          refresh_token: signInData.refresh_token,
-        },
-        employee: { id: employee.id, name: employee.name },
+        session: { access_token: signInData.access_token, refresh_token: signInData.refresh_token },
+        employee: { id: employee.id, name: employee.name, role: employee.role },
         roles: (roles || []).map((r: any) => r.role),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
