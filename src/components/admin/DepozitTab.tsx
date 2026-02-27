@@ -105,20 +105,27 @@ export default function DepozitTab() {
                     <TableHead>Produs</TableHead>
                     <TableHead className="text-right">Stoc Depozit</TableHead>
                     <TableHead className="text-right">Stoc Magazin</TableHead>
+                    <TableHead className="text-right"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(searchTerm ? products.filter((p: any) =>
                     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     p.base_id.toLowerCase().includes(searchTerm.toLowerCase())
-                  ) : products.filter((p: any) => p.active)).map((p: any) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-mono text-xs">{p.base_id}</TableCell>
-                      <TableCell>{p.name}</TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${p.stock_depozit > 0 ? "" : "text-muted-foreground"}`}>{p.stock_depozit}</TableCell>
+                  ) : products.filter((p: any) => p.active)).map((p: any) => {
+                    const isZero = p.stock_depozit <= 0;
+                    return (
+                    <TableRow key={p.id} className={isZero ? "opacity-60" : ""}>
+                      <TableCell className={`font-mono text-xs ${isZero ? "text-muted-foreground" : ""}`}>{p.base_id}</TableCell>
+                      <TableCell className={isZero ? "text-muted-foreground" : ""}>{p.name}</TableCell>
+                      <TableCell className={`text-right font-mono font-bold ${isZero ? "text-muted-foreground" : ""}`}>{p.stock_depozit}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
+                      <TableCell className="text-right">
+                        {isZero && <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border px-1.5 py-0">Stoc 0</Badge>}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {products.filter((p: any) => p.active).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
