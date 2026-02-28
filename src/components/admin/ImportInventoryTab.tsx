@@ -35,32 +35,38 @@ const LOCATION_MAP: Record<string, { field: "stock_general" | "stock_depozit"; l
 };
 
 function parseTextFile(content: string): { description: string; quantity: number; code: string; lineNumber: number }[] {
-  const lines = content.split(/\r?\n/).filter(l => l.trim());
-  return lines.map((line, idx) => {
-    // Try pipe delimiter first, then tab, then multiple spaces
+  const lines = content.split(/\r?\n/);
+  const results: { description: string; quantity: number; code: string; lineNumber: number }[] = [];
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx];
+    // Skip empty lines and lines that are only whitespace/tabs
+    const trimmed = line.replace(/\t/g, "").trim();
+    if (!trimmed) continue;
+
+    // Skip header line
+    if (/^Descriere\s/i.test(trimmed) || /^Descriere\t/i.test(line)) continue;
+
+    // Split by tab (primary delimiter for these files)
     let parts: string[];
-    if (line.includes("|")) {
-      parts = line.split("|").map(s => s.trim());
-    } else if (line.includes("\t")) {
-      parts = line.split("\t").map(s => s.trim());
+    if (line.includes("\t")) {
+      parts = line.split("\t").map(s => s.trim()).filter(s => s.length > 0);
+    } else if (line.includes("|")) {
+      parts = line.split("|").map(s => s.trim()).filter(s => s.length > 0);
     } else {
-      // Split by 2+ spaces
-      parts = line.split(/\s{2,}/).map(s => s.trim());
+      parts = line.split(/\s{2,}/).map(s => s.trim()).filter(s => s.length > 0);
     }
 
-    // Expected: Description | Quantity | Code
-    // Sometimes code might be first or last — we detect the 17-digit numeric as code
     let description = "";
     let quantity = 0;
     let code = "";
 
     if (parts.length >= 3) {
-      // Find which part is the barcode (17 digits)
+      // Find the barcode (17 digits)
       const codeIdx = parts.findIndex(p => /^\d{17}$/.test(p));
       if (codeIdx !== -1) {
         code = parts[codeIdx];
         const remaining = parts.filter((_, i) => i !== codeIdx);
-        // Find which remaining part is the quantity (pure integer)
         const qtyIdx = remaining.findIndex(p => /^\d+$/.test(p));
         if (qtyIdx !== -1) {
           quantity = parseInt(remaining[qtyIdx], 10);
@@ -70,7 +76,7 @@ function parseTextFile(content: string): { description: string; quantity: number
           quantity = parseInt(remaining[1], 10) || 0;
         }
       } else {
-        // Fallback: assume Description | Quantity | Code order
+        // Fallback: Descriere | Cant | Cod
         description = parts[0];
         quantity = parseInt(parts[1], 10) || 0;
         code = parts[2];
@@ -79,11 +85,12 @@ function parseTextFile(content: string): { description: string; quantity: number
       description = parts[0];
       code = parts[1];
     } else {
-      description = line;
+      description = line.trim();
     }
 
-    return { description, quantity, code, lineNumber: idx + 1 };
-  });
+    results.push({ description, quantity, code, lineNumber: idx + 1 });
+  }
+  return results;
 }
 
 export default function ImportInventoryTab() {
@@ -288,7 +295,7 @@ export default function ImportInventoryTab() {
               <CardContent className="p-4 text-center space-y-3">
                 <Store className="h-8 w-8 mx-auto text-muted-foreground" />
                 <p className="font-medium text-sm">Magazin Ferdinand</p>
-                <p className="text-xs text-muted-foreground">02Produse-IN-Dragasani.txt</p>
+                <p className="text-xs text-muted-foreground">02Produse-IN-Ferdinand.txt</p>
                 <Button
                   variant="outline"
                   size="sm"
