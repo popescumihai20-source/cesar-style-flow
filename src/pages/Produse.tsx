@@ -205,8 +205,18 @@ export default function Produse() {
 
       <Tabs defaultValue="magazin" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="magazin" className="gap-1.5"><Store className="h-3.5 w-3.5" />Magazin Ferdinand</TabsTrigger>
-          <TabsTrigger value="depozit" className="gap-1.5"><Warehouse className="h-3.5 w-3.5" />Depozit</TabsTrigger>
+          <TabsTrigger value="magazin" className="gap-1.5">
+            <Store className="h-3.5 w-3.5" />Magazin Ferdinand
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
+              {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="depozit" className="gap-1.5">
+            <Warehouse className="h-3.5 w-3.5" />Depozit
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
+              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) : 0), 0)} buc
+            </Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="magazin" className="space-y-4">
