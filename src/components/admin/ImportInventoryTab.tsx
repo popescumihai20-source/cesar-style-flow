@@ -335,7 +335,7 @@ export default function ImportInventoryTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
               <div className="text-center p-3 rounded-lg bg-muted/50">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Linii</p>
                 <p className="text-lg font-bold font-mono">{result.totalLines}</p>
@@ -343,6 +343,10 @@ export default function ImportInventoryTab() {
               <div className="text-center p-3 rounded-lg bg-green-500/10">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Valide</p>
                 <p className="text-lg font-bold font-mono text-green-500">{result.validLines}</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-primary/10">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Bucăți</p>
+                <p className="text-lg font-bold font-mono text-primary">{result.totalQuantity.toLocaleString("ro-RO")}</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-muted/50">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Produse Create</p>
