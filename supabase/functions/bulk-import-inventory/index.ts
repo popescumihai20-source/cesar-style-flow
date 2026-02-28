@@ -11,62 +11,108 @@ interface ImportLine {
   barcode: string;
 }
 
-function parseCSV(rawText: string): ImportLine[] {
-  if (!rawText || typeof rawText !== "string") return [];
-  const lines = rawText.split(/\r?\n/);
-  const results: ImportLine[] = [];
+interface ValidationError {
+  line: number;
+  description: string;
+  barcode: string;
+  reason: string;
+}
 
-  for (const line of lines) {
-    const trimmed = line.replace(/,+$/, "").trim();
-    if (!trimmed) continue;
+function detectDelimiter(firstLine: string): string {
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  return tabCount > commaCount ? "\t" : ",";
+}
 
-    // Parse CSV handling quoted fields
-    const fields: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i];
-      if (inQuotes) {
-        if (ch === '"') {
-          if (i + 1 < trimmed.length && trimmed[i + 1] === '"') {
-            current += '"';
-            i++;
-          } else {
-            inQuotes = false;
-          }
+function isHeaderLine(line: string): boolean {
+  const lower = line.toLowerCase();
+  return /^(descriere|column|header|nr|#|produs)/i.test(lower);
+}
+
+function splitLine(line: string, delimiter: string): string[] {
+  if (delimiter === "\t") {
+    return line.split("\t").map(f => f.trim());
+  }
+  // CSV with quoted fields
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
         } else {
-          current += ch;
+          inQuotes = false;
         }
       } else {
-        if (ch === '"') {
-          inQuotes = true;
-        } else if (ch === ',') {
-          fields.push(current.trim());
-          current = "";
-        } else {
-          current += ch;
-        }
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        fields.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
       }
     }
-    fields.push(current.trim());
+  }
+  fields.push(current.trim());
+  return fields;
+}
 
-    if (fields.length < 3) continue;
+function parseCSV(rawText: string): { valid: ImportLine[]; errors: ValidationError[] } {
+  const valid: ImportLine[] = [];
+  const errors: ValidationError[] = [];
 
-    const description = fields[0];
-    const qtyStr = fields[1];
-    const code = fields[2];
+  if (!rawText || typeof rawText !== "string") return { valid, errors };
 
-    if (!code || !/^\d{17}$/.test(code)) continue;
+  const rawLines = rawText.split(/\r?\n/);
+  if (rawLines.length === 0) return { valid, errors };
+
+  // Detect delimiter from first non-empty line
+  const firstNonEmpty = rawLines.find(l => l.trim().length > 0) || "";
+  const delimiter = detectDelimiter(firstNonEmpty);
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const raw = rawLines[i].replace(/,+$/, "").replace(/\t+$/, "").trim();
+    if (!raw) continue;
+    if (isHeaderLine(raw)) continue;
+
+    const fields = splitLine(raw, delimiter);
+    if (fields.length < 3) {
+      errors.push({ line: i + 1, description: fields[0] || "", barcode: "", reason: "Mai puțin de 3 coloane" });
+      continue;
+    }
+
+    const description = fields[0].trim();
+    const qtyStr = fields[1].trim();
+    const barcode = fields[2].trim();
+
+    if (!description) {
+      errors.push({ line: i + 1, description: "", barcode, reason: "Descriere lipsă" });
+      continue;
+    }
 
     const quantity = parseInt(qtyStr, 10);
-    if (isNaN(quantity) || quantity <= 0) continue;
+    if (isNaN(quantity) || quantity < 0) {
+      errors.push({ line: i + 1, description, barcode, reason: `Cantitate invalidă: "${qtyStr}"` });
+      continue;
+    }
 
-    if (/^(Descriere|Column)/i.test(description)) continue;
+    if (!/^\d{17}$/.test(barcode)) {
+      errors.push({ line: i + 1, description, barcode, reason: `Cod invalid (${barcode.length} cifre, trebuie 17)` });
+      continue;
+    }
 
-    results.push({ description, quantity, barcode: code });
+    valid.push({ description, quantity, barcode });
   }
 
-  return results;
+  return { valid, errors };
 }
 
 Deno.serve(async (req) => {
@@ -79,7 +125,7 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !serviceKey) {
-      console.error("Missing env vars", { hasUrl: !!supabaseUrl, hasKey: !!serviceKey });
+      console.error("Missing env vars");
       return new Response(
         JSON.stringify({ success: false, error: "Missing server configuration" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -91,41 +137,28 @@ Deno.serve(async (req) => {
     let body: Record<string, unknown>;
     try {
       body = await req.json();
-    } catch (e) {
-      console.error("Failed to parse request body:", e);
+    } catch {
       return new Response(
         JSON.stringify({ success: false, error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const location: "depozit" | "magazin" = (body.location as string) === "magazin" ? "magazin" : "depozit";
+    const locationKey = (body.location as string) === "magazin" ? "magazin" : "depozit";
+    const locationLabel = locationKey === "depozit" ? "Depozit Central" : "Magazin Ferdinand";
+    const stockField = locationKey === "depozit" ? "stock_depozit" : "stock_general";
 
-    let lines: ImportLine[];
-    try {
-      if (body.csvText && typeof body.csvText === "string") {
-        lines = parseCSV(body.csvText as string);
-      } else if (body.lines && Array.isArray(body.lines)) {
-        lines = body.lines as ImportLine[];
-      } else {
-        lines = [];
-      }
-    } catch (e) {
-      console.error("CSV parse error:", e);
-      return new Response(
-        JSON.stringify({ success: false, error: "Failed to parse CSV: " + String(e) }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const csvText = typeof body.csvText === "string" ? (body.csvText as string) : "";
+    const { valid: lines, errors: validationErrors } = parseCSV(csvText);
 
-    console.log(`Parsed ${lines.length} valid lines for location: ${location}`);
+    console.log(`Parsed ${lines.length} valid lines, ${validationErrors.length} errors for ${locationLabel}`);
 
     if (lines.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          summary: { totalLines: 0, validLines: 0, invalidLines: 0, uniqueProducts: 0, created: 0, updated: 0, totalQuantity: 0, location: location === "depozit" ? "Depozit Central" : "Magazin Ferdinand" },
-          errors: [],
+          summary: { totalLines: 0, validLines: 0, uniqueProducts: 0, created: 0, updated: 0, totalQuantity: 0, location: locationLabel },
+          errors: validationErrors.slice(0, 50),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -133,42 +166,47 @@ Deno.serve(async (req) => {
 
     // Aggregate by base_id (first 7 digits)
     const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number }>();
-    for (const vl of lines) {
-      const baseId = vl.barcode.substring(0, 7);
-      const price = parseInt(vl.barcode.substring(13, 17), 10);
+    for (const line of lines) {
+      const baseId = line.barcode.substring(0, 7);
+      const price = parseInt(line.barcode.substring(13, 17), 10);
       const existing = aggregated.get(baseId);
       if (existing) {
-        existing.totalQty += vl.quantity;
+        existing.totalQty += line.quantity;
       } else {
-        aggregated.set(baseId, { baseId, description: vl.description, totalQty: vl.quantity, price });
+        aggregated.set(baseId, { baseId, description: line.description, totalQty: line.quantity, price });
       }
     }
 
+    const totalQuantity = Array.from(aggregated.values()).reduce((s, a) => s + a.totalQty, 0);
     let created = 0;
     let updated = 0;
-    const stockField = location === "depozit" ? "stock_depozit" : "stock_general";
-    const totalQuantity = Array.from(aggregated.values()).reduce((s, a) => s + a.totalQty, 0);
 
-    // Fetch existing products in chunks
+    // Fetch existing products in chunks to know which exist
     const baseIds = Array.from(aggregated.keys());
-    const existingMap = new Map<string, string>();
+    const existingMap = new Map<string, { id: string; stock_depozit: number; stock_general: number }>();
 
     for (let i = 0; i < baseIds.length; i += 100) {
       const chunk = baseIds.slice(i, i + 100);
-      const { data } = await supabase.from("products").select("id, base_id").in("base_id", chunk);
+      const { data } = await supabase.from("products").select("id, base_id, stock_depozit, stock_general").in("base_id", chunk);
       if (data) {
-        for (const p of data) existingMap.set(p.base_id, p.id);
+        for (const p of data) existingMap.set(p.base_id, { id: p.id, stock_depozit: p.stock_depozit, stock_general: p.stock_general });
       }
     }
 
-    // Batch insert new products in chunks of 500
+    // LOCATION-SAFE: For existing products, ONLY update the target stock field
+    // For new products, insert with the other stock field = 0
     const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { id: string; qty: number }[] = [];
 
     for (const [baseId, item] of aggregated) {
-      const existingId = existingMap.get(baseId);
-      if (existingId) {
-        toUpdate.push({ id: existingId, qty: item.totalQty });
+      const existing = existingMap.get(baseId);
+      if (existing) {
+        // Update ONLY the target stock field - never touch the other location
+        const { error } = await supabase
+          .from("products")
+          .update({ [stockField]: item.totalQty, active: true })
+          .eq("id", existing.id);
+        if (!error) updated++;
+        else console.error(`Update error for ${baseId}:`, error.message);
       } else {
         toInsert.push({
           base_id: baseId,
@@ -182,6 +220,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Batch insert new products in chunks of 500
     for (let i = 0; i < toInsert.length; i += 500) {
       const chunk = toInsert.slice(i, i + 500);
       const { error } = await supabase.from("products").insert(chunk);
@@ -189,27 +228,21 @@ Deno.serve(async (req) => {
       else console.error("Insert batch error:", error.message);
     }
 
-    for (const upd of toUpdate) {
-      const { error } = await supabase.from("products").update({ [stockField]: upd.qty, active: true }).eq("id", upd.id);
-      if (!error) updated++;
-    }
-
-    console.log(`Import done: ${created} created, ${updated} updated, total qty: ${totalQuantity}`);
+    console.log(`Import ${locationLabel}: ${created} created, ${updated} updated, qty=${totalQuantity}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         summary: {
-          totalLines: lines.length,
+          totalLines: lines.length + validationErrors.length,
           validLines: lines.length,
-          invalidLines: 0,
           uniqueProducts: aggregated.size,
           created,
           updated,
           totalQuantity,
-          location: location === "depozit" ? "Depozit Central" : "Magazin Ferdinand",
+          location: locationLabel,
         },
-        errors: [],
+        errors: validationErrors.slice(0, 50),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
