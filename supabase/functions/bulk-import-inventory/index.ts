@@ -12,6 +12,7 @@ interface ImportLine {
 }
 
 function parseCSV(rawText: string): ImportLine[] {
+  if (!rawText || typeof rawText !== "string") return [];
   const lines = rawText.split(/\r?\n/);
   const results: ImportLine[] = [];
 
@@ -78,24 +79,43 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !serviceKey) {
+      console.error("Missing env vars", { hasUrl: !!supabaseUrl, hasKey: !!serviceKey });
       return new Response(
-        JSON.stringify({ success: false, error: "Missing server configuration (SUPABASE_URL or SERVICE_ROLE_KEY)" }),
+        JSON.stringify({ success: false, error: "Missing server configuration" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const body = await req.json();
-    const location: "depozit" | "magazin" = body.location || "depozit";
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("Failed to parse request body:", e);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const location: "depozit" | "magazin" = (body.location as string) === "magazin" ? "magazin" : "depozit";
 
     let lines: ImportLine[];
-    if (body.csvText) {
-      lines = parseCSV(body.csvText);
-    } else if (body.lines && Array.isArray(body.lines)) {
-      lines = body.lines;
-    } else {
-      lines = [];
+    try {
+      if (body.csvText && typeof body.csvText === "string") {
+        lines = parseCSV(body.csvText as string);
+      } else if (body.lines && Array.isArray(body.lines)) {
+        lines = body.lines as ImportLine[];
+      } else {
+        lines = [];
+      }
+    } catch (e) {
+      console.error("CSV parse error:", e);
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to parse CSV: " + String(e) }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log(`Parsed ${lines.length} valid lines for location: ${location}`);
