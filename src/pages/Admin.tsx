@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Admin() {
@@ -27,6 +28,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [fiscalInput, setFiscalInput] = useState("");
+  const [activeTab, setActiveTab] = useState("sales");
 
   const { data: sales = [] } = useQuery({
     queryKey: ["admin-sales"],
@@ -197,22 +199,39 @@ export default function Admin() {
         </div>
       )}
 
-      <Tabs defaultValue="sales" className="space-y-4">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="sales">Vânzări</TabsTrigger>
-          <TabsTrigger value="reports"><BarChart3 className="h-3 w-3 mr-1" />Rapoarte</TabsTrigger>
-          <TabsTrigger value="stock">Stoc</TabsTrigger>
-          <TabsTrigger value="employees">Angajați</TabsTrigger>
-          <TabsTrigger value="devices">Dispozitive</TabsTrigger>
-          <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
-          <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
-          <TabsTrigger value="articole"><BookOpen className="h-3 w-3 mr-1" />Articole</TabsTrigger>
-          <TabsTrigger value="depozit"><Warehouse className="h-3 w-3 mr-1" />Depozit</TabsTrigger>
-          <TabsTrigger value="barcode-gen"><Barcode className="h-3 w-3 mr-1" />Generator</TabsTrigger>
-          <TabsTrigger value="inventariere"><ClipboardList className="h-3 w-3 mr-1" />Inventariere</TabsTrigger>
-          <TabsTrigger value="import-inventory"><Upload className="h-3 w-3 mr-1" />Import</TabsTrigger>
-          <TabsTrigger value="settings"><Lock className="h-3 w-3 mr-1" />Setări</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <TabsList>
+            <TabsTrigger value="sales">Vânzări</TabsTrigger>
+            <TabsTrigger value="reports"><BarChart3 className="h-3 w-3 mr-1" />Rapoarte</TabsTrigger>
+            <TabsTrigger value="stock">Stoc</TabsTrigger>
+            <TabsTrigger value="employees">Angajați</TabsTrigger>
+            <TabsTrigger value="devices">Dispozitive</TabsTrigger>
+            <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
+            <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
+            <TabsTrigger value="articole"><BookOpen className="h-3 w-3 mr-1" />Articole</TabsTrigger>
+          </TabsList>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant={["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) ? "default" : "outline"} size="sm" className="gap-1">
+                {activeTab === "depozit" && <><Warehouse className="h-3 w-3" />Depozit</>}
+                {activeTab === "barcode-gen" && <><Barcode className="h-3 w-3" />Generator</>}
+                {activeTab === "inventariere" && <><ClipboardList className="h-3 w-3" />Inventariere</>}
+                {activeTab === "import-inventory" && <><Upload className="h-3 w-3" />Import</>}
+                {activeTab === "settings" && <><Lock className="h-3 w-3" />Setări</>}
+                {!["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) && "Mai mult"}
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setActiveTab("depozit")} className="gap-2"><Warehouse className="h-3.5 w-3.5" />Depozit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("barcode-gen")} className="gap-2"><Barcode className="h-3.5 w-3.5" />Generator Coduri</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("inventariere")} className="gap-2"><ClipboardList className="h-3.5 w-3.5" />Inventariere</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("import-inventory")} className="gap-2"><Upload className="h-3.5 w-3.5" />Import Inventar</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("settings")} className="gap-2"><Lock className="h-3.5 w-3.5" />Setări</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         {/* Sales tab */}
         <TabsContent value="sales">
