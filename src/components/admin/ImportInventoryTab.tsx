@@ -30,7 +30,9 @@ export default function ImportInventoryTab() {
   const handleFileUpload = useCallback(async (file: File, locationKey: "depozit" | "magazin") => {
     setIsImporting(true);
     try {
-      const csvText = await file.text();
+      const rawText = await file.text();
+      // Strip trailing empty columns to reduce payload size
+      const csvText = rawText.split(/\r?\n/).map(line => line.replace(/,+$/, '')).join('\n');
       
       const { data, error } = await supabase.functions.invoke("bulk-import-inventory", {
         body: { csvText, location: locationKey },
