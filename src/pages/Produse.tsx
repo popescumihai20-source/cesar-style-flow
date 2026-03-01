@@ -357,6 +357,7 @@ export default function Produse() {
                 </TableHeader>
                 <TableBody>
                   {products.filter((p: any) => {
+                    if ((p.stock_depozit ?? 0) <= 0) return false;
                     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search)) return false;
                     return p.active;
                   }).map((p: any) => {
