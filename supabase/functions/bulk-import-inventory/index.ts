@@ -197,29 +197,31 @@ Deno.serve(async (req) => {
 
     // Fetch existing products to know which exist
     const baseIds = Array.from(aggregated.keys());
-    const existingMap = new Map<string, string>(); // base_id -> id
+    const existingMap = new Map<string, { id: string; full_barcode: string | null }>(); // base_id -> product
 
     for (let i = 0; i < baseIds.length; i += 100) {
       const chunk = baseIds.slice(i, i + 100);
-      const { data } = await supabase.from("products").select("id, base_id").in("base_id", chunk);
+      const { data } = await supabase.from("products").select("id, base_id, full_barcode").in("base_id", chunk);
       if (data) {
-        for (const p of data) existingMap.set(p.base_id, p.id);
+        for (const p of data) existingMap.set(p.base_id, { id: p.id, full_barcode: p.full_barcode });
       }
     }
 
     // LOCATION-SAFE: For existing products, ONLY update the target stock field
     // NEVER touch the other location's stock
     for (const [baseId, item] of aggregated) {
-      const existingId = existingMap.get(baseId);
-      if (existingId) {
+      const existingProduct = existingMap.get(baseId);
+      if (existingProduct) {
         // Update ONLY the target stock field
         const updateData: Record<string, unknown> = { [stockField]: item.totalQty, active: true };
-        // Save full_barcode if not already set
-        updateData.full_barcode = item.fullBarcode;
+        // Save full_barcode only once, do not overwrite existing value
+        if (!existingProduct.full_barcode) {
+          updateData.full_barcode = item.fullBarcode;
+        }
         const { error } = await supabase
           .from("products")
           .update(updateData)
-          .eq("id", existingId);
+          .eq("id", existingProduct.id);
         if (!error) updated++;
         else console.error(`Update error for ${baseId}:`, error.message);
       } else {
