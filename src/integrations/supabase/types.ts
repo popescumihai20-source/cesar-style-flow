@@ -641,6 +641,56 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_audit_log: {
+        Row: {
+          created_at: string
+          employee_card_code: string | null
+          employee_name: string | null
+          id: string
+          line_total: number
+          location_name: string
+          product_base_id: string
+          product_name: string
+          quantity: number
+          sale_id: string
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          id?: string
+          line_total: number
+          location_name: string
+          product_base_id: string
+          product_name: string
+          quantity: number
+          sale_id: string
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          id?: string
+          line_total?: number
+          location_name?: string
+          product_base_id?: string
+          product_name?: string
+          quantity?: number
+          sale_id?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_audit_log_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           created_at: string
@@ -1075,6 +1125,56 @@ export type Database = {
           type?: string
         }
         Relationships: []
+      }
+      transfer_audit_log: {
+        Row: {
+          created_at: string
+          employee_card_code: string | null
+          employee_name: string | null
+          from_location_name: string
+          id: string
+          note: string | null
+          product_base_id: string
+          product_name: string
+          quantity: number
+          to_location_name: string
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          from_location_name: string
+          id?: string
+          note?: string | null
+          product_base_id: string
+          product_name: string
+          quantity: number
+          to_location_name: string
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          from_location_name?: string
+          id?: string
+          note?: string | null
+          product_base_id?: string
+          product_name?: string
+          quantity?: number
+          to_location_name?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_audit_log_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "transfer_headers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transfer_headers: {
         Row: {
