@@ -258,6 +258,28 @@ export default function POS() {
     if (!cashierEmployeeId || cart.length === 0) return;
     setIsSubmitting(true);
     try {
+      // FINAL STOCK CHECK — re-fetch current store stock to prevent overselling
+      if (storeLocation?.id) {
+        for (const item of cart) {
+          const { data: freshStock } = await supabase
+            .from("inventory_stock" as any)
+            .select("quantity")
+            .eq("product_id", item.product.id)
+            .eq("location_id", storeLocation.id)
+            .maybeSingle();
+          const available = (freshStock as any)?.quantity ?? 0;
+          if (item.quantity > available) {
+            toast({
+              title: "⛔ Stoc insuficient",
+              description: `${item.product.name} — disponibil: ${available}, în coș: ${item.quantity}`,
+              variant: "destructive",
+            });
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+
       // Generate internal ID
       const { data: idData } = await supabase.rpc("generate_sale_internal_id");
       const internalId = idData || `CES-${Date.now()}`;

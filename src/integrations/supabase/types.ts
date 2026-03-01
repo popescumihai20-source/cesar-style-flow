@@ -641,6 +641,63 @@ export type Database = {
         }
         Relationships: []
       }
+      receiving_audit_log: {
+        Row: {
+          barcode: string
+          base_id: string
+          created_at: string
+          employee_card_code: string | null
+          employee_name: string | null
+          id: string
+          location_name: string
+          product_id: string
+          product_name: string
+          quantity: number
+          receipt_id: string
+        }
+        Insert: {
+          barcode: string
+          base_id: string
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          id?: string
+          location_name: string
+          product_id: string
+          product_name: string
+          quantity: number
+          receipt_id: string
+        }
+        Update: {
+          barcode?: string
+          base_id?: string
+          created_at?: string
+          employee_card_code?: string | null
+          employee_name?: string | null
+          id?: string
+          location_name?: string
+          product_id?: string
+          product_name?: string
+          quantity?: number
+          receipt_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiving_audit_log_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receiving_audit_log_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "stock_receipts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_audit_log: {
         Row: {
           created_at: string
