@@ -12,6 +12,7 @@ import Produse from "@/pages/Produse";
 import Receptie from "@/pages/Receptie";
 import ScoatereStoc from "@/pages/ScoatereStoc";
 import Admin from "@/pages/Admin";
+import Transferuri from "@/pages/Transferuri";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -42,6 +43,11 @@ const App = () => (
               <Route path="/receptie" element={
                 <ProtectedRoute allowedRoles={["admin", "depozit"]}>
                   <Receptie />
+                </ProtectedRoute>
+              } />
+              <Route path="/transferuri" element={
+                <ProtectedRoute allowedRoles={["admin", "depozit"]}>
+                  <Transferuri />
                 </ProtectedRoute>
               } />
               <Route path="/scoatere-stoc" element={<ScoatereStoc />} />

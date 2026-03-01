@@ -1,4 +1,4 @@
-import { ShoppingCart, Package, Truck, PackageMinus, Settings, LogOut } from "lucide-react";
+import { ShoppingCart, Package, Truck, PackageMinus, Settings, LogOut, ArrowRightLeft } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
@@ -20,7 +20,8 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { title: "Magazin Ferdinand", url: "/pos", icon: ShoppingCart, roles: [] },
   { title: "Produse", url: "/produse", icon: Package, roles: ["admin"] },
-  { title: "Recepție", url: "/receptie", icon: Truck, roles: ["admin"] },
+  { title: "Recepție", url: "/receptie", icon: Truck, roles: ["admin", "depozit"] },
+  { title: "Transferuri", url: "/transferuri", icon: ArrowRightLeft, roles: ["admin", "depozit"] },
   { title: "Scoatere Stoc", url: "/scoatere-stoc", icon: PackageMinus, roles: [] },
   { title: "Admin", url: "/admin", icon: Settings, roles: ["admin"] },
 ];
