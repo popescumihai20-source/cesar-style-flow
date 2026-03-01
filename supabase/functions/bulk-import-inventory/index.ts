@@ -20,8 +20,11 @@ interface ValidationError {
 
 function detectDelimiter(firstLine: string): string {
   const tabCount = (firstLine.match(/\t/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
   const commaCount = (firstLine.match(/,/g) || []).length;
-  return tabCount > commaCount ? "\t" : ",";
+  if (tabCount >= semiCount && tabCount >= commaCount) return "\t";
+  if (semiCount >= commaCount) return ";";
+  return ",";
 }
 
 function isHeaderLine(line: string): boolean {
@@ -30,8 +33,9 @@ function isHeaderLine(line: string): boolean {
 }
 
 function splitLine(line: string, delimiter: string): string[] {
-  if (delimiter === "\t") {
-    return line.split("\t").map(f => f.trim());
+  // For tab and semicolon, simple split
+  if (delimiter === "\t" || delimiter === ";") {
+    return line.split(delimiter).map(f => f.trim());
   }
   // CSV with quoted fields
   const fields: string[] = [];
@@ -74,12 +78,11 @@ function parseCSV(rawText: string): { valid: ImportLine[]; errors: ValidationErr
   const rawLines = rawText.split(/\r?\n/);
   if (rawLines.length === 0) return { valid, errors };
 
-  // Detect delimiter from first non-empty line
   const firstNonEmpty = rawLines.find(l => l.trim().length > 0) || "";
   const delimiter = detectDelimiter(firstNonEmpty);
 
   for (let i = 0; i < rawLines.length; i++) {
-    const raw = rawLines[i].replace(/,+$/, "").replace(/\t+$/, "").trim();
+    const raw = rawLines[i].replace(/[,;\t]+$/, "").trim();
     if (!raw) continue;
     if (isHeaderLine(raw)) continue;
 
@@ -125,7 +128,6 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !serviceKey) {
-      console.error("Missing env vars");
       return new Response(
         JSON.stringify({ success: false, error: "Missing server configuration" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -149,6 +151,18 @@ Deno.serve(async (req) => {
     const stockField = locationKey === "depozit" ? "stock_depozit" : "stock_general";
 
     const csvText = typeof body.csvText === "string" ? (body.csvText as string) : "";
+
+    if (!csvText.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          summary: { totalLines: 0, validLines: 0, uniqueProducts: 0, created: 0, updated: 0, totalQuantity: 0, location: locationLabel },
+          errors: [],
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { valid: lines, errors: validationErrors } = parseCSV(csvText);
 
     console.log(`Parsed ${lines.length} valid lines, ${validationErrors.length} errors for ${locationLabel}`);
@@ -157,7 +171,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          summary: { totalLines: 0, validLines: 0, uniqueProducts: 0, created: 0, updated: 0, totalQuantity: 0, location: locationLabel },
+          summary: { totalLines: validationErrors.length, validLines: 0, uniqueProducts: 0, created: 0, updated: 0, totalQuantity: 0, location: locationLabel },
           errors: validationErrors.slice(0, 50),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -181,34 +195,33 @@ Deno.serve(async (req) => {
     let created = 0;
     let updated = 0;
 
-    // Fetch existing products in chunks to know which exist
+    // Fetch existing products to know which exist
     const baseIds = Array.from(aggregated.keys());
-    const existingMap = new Map<string, { id: string; stock_depozit: number; stock_general: number }>();
+    const existingMap = new Map<string, string>(); // base_id -> id
 
     for (let i = 0; i < baseIds.length; i += 100) {
       const chunk = baseIds.slice(i, i + 100);
-      const { data } = await supabase.from("products").select("id, base_id, stock_depozit, stock_general").in("base_id", chunk);
+      const { data } = await supabase.from("products").select("id, base_id").in("base_id", chunk);
       if (data) {
-        for (const p of data) existingMap.set(p.base_id, { id: p.id, stock_depozit: p.stock_depozit, stock_general: p.stock_general });
+        for (const p of data) existingMap.set(p.base_id, p.id);
       }
     }
 
     // LOCATION-SAFE: For existing products, ONLY update the target stock field
-    // For new products, insert with the other stock field = 0
-    const toInsert: Record<string, unknown>[] = [];
-
+    // NEVER touch the other location's stock
     for (const [baseId, item] of aggregated) {
-      const existing = existingMap.get(baseId);
-      if (existing) {
-        // Update ONLY the target stock field - never touch the other location
+      const existingId = existingMap.get(baseId);
+      if (existingId) {
+        // Update ONLY the target stock field
         const { error } = await supabase
           .from("products")
           .update({ [stockField]: item.totalQty, active: true })
-          .eq("id", existing.id);
+          .eq("id", existingId);
         if (!error) updated++;
         else console.error(`Update error for ${baseId}:`, error.message);
       } else {
-        toInsert.push({
+        // Insert new product with ONLY the target location's stock set
+        const newProduct: Record<string, unknown> = {
           base_id: baseId,
           name: item.description,
           selling_price: item.price,
@@ -216,16 +229,11 @@ Deno.serve(async (req) => {
           stock_depozit: stockField === "stock_depozit" ? item.totalQty : 0,
           stock_general: stockField === "stock_general" ? item.totalQty : 0,
           active: true,
-        });
+        };
+        const { error } = await supabase.from("products").insert(newProduct);
+        if (!error) created++;
+        else console.error(`Insert error for ${baseId}:`, error.message);
       }
-    }
-
-    // Batch insert new products in chunks of 500
-    for (let i = 0; i < toInsert.length; i += 500) {
-      const chunk = toInsert.slice(i, i + 500);
-      const { error } = await supabase.from("products").insert(chunk);
-      if (!error) created += chunk.length;
-      else console.error("Insert batch error:", error.message);
     }
 
     console.log(`Import ${locationLabel}: ${created} created, ${updated} updated, qty=${totalQuantity}`);
