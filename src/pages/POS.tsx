@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Lock, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function POS() {
+  const queryClient = useQueryClient();
   const {
     mode, cart, cashierName, cashierEmployeeId,
     paymentMethod, setPaymentMethod,
@@ -75,6 +76,45 @@ export default function POS() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // Fetch store location
+  const { data: storeLocation } = useQuery({
+    queryKey: ["store-location"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inventory_locations" as any)
+        .select("*")
+        .eq("type", "store")
+        .eq("active", true)
+        .limit(1)
+        .single();
+      if (error) throw error;
+      return data as any;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Fetch inventory_stock for the store location
+  const { data: storeStock = [] } = useQuery({
+    queryKey: ["store-stock", storeLocation?.id],
+    queryFn: async () => {
+      if (!storeLocation?.id) return [];
+      const { data, error } = await supabase
+        .from("inventory_stock" as any)
+        .select("product_id, quantity")
+        .eq("location_id", storeLocation.id);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!storeLocation?.id,
+    staleTime: 30 * 1000,
+  });
+
+  // Helper to get store stock for a product
+  const getStoreStock = useCallback((productId: string) => {
+    const entry = storeStock.find((s: any) => s.product_id === productId);
+    return entry?.quantity ?? 0;
+  }, [storeStock]);
 
   // Filter products for search
   const filteredProducts = searchQuery.length >= 2
@@ -144,16 +184,25 @@ export default function POS() {
     if (parsed.isValid) {
       const product = products.find(p => p.base_id === parsed.baseId);
       if (product) {
-        addToCart(product, null, null);
-        const currentStock = product.stock_general;
+        const storeQty = getStoreStock(product.id);
         const inCart = cart.filter(c => c.product.id === product.id).reduce((s, c) => s + c.quantity, 0);
-        if (currentStock - inCart <= 0) {
+        if (storeQty <= 0) {
           toast({
-            title: "⚠️ Stoc epuizat",
-            description: `${product.name} — stoc: ${currentStock}`,
+            title: "⛔ Stoc 0 în magazin",
+            description: `${product.name} — nu poate fi adăugat`,
+            variant: "destructive",
+          });
+          setScanInput("");
+          return;
+        }
+        if (inCart + 1 > storeQty) {
+          toast({
+            title: "⚠️ Stoc insuficient",
+            description: `${product.name} — disponibil: ${storeQty}, în coș: ${inCart}`,
             variant: "destructive",
           });
         }
+        addToCart(product, null, null);
       } else {
         toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId}`, variant: "destructive" });
       }
@@ -192,6 +241,11 @@ export default function POS() {
   const handleAddFromSearch = (product: Product) => {
     if (mode !== "casier") {
       setShowSearch(false);
+      return;
+    }
+    const storeQty = getStoreStock(product.id);
+    if (storeQty <= 0) {
+      toast({ title: "⛔ Stoc 0 în magazin", description: `${product.name} — nu poate fi adăugat`, variant: "destructive" });
       return;
     }
     addToCart(product, null, null);
@@ -244,8 +298,13 @@ export default function POS() {
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Decrement stock — fetch current stock from DB to avoid race conditions
+      // Decrement stock — update both products and inventory_stock
+      // Get employee info for audit log
+      const { data: empData } = await supabase.from("employees").select("name, employee_card_code").eq("id", cashierEmployeeId).single();
+      const locationName = storeLocation?.name || "Magazin Ferdinand";
+
       for (const item of cart) {
+        // Update products.stock_general
         const { data: currentProduct } = await supabase
           .from("products")
           .select("stock_general")
@@ -255,9 +314,40 @@ export default function POS() {
         if (currentProduct) {
           await supabase
             .from("products")
-            .update({ stock_general: currentProduct.stock_general - item.quantity })
+            .update({ stock_general: Math.max(0, currentProduct.stock_general - item.quantity) })
             .eq("id", item.product.id);
         }
+
+        // Update inventory_stock for store location
+        if (storeLocation?.id) {
+          const { data: stockEntry } = await supabase
+            .from("inventory_stock" as any)
+            .select("quantity")
+            .eq("product_id", item.product.id)
+            .eq("location_id", storeLocation.id)
+            .maybeSingle();
+
+          if (stockEntry) {
+            await supabase
+              .from("inventory_stock" as any)
+              .update({ quantity: Math.max(0, (stockEntry as any).quantity - item.quantity), updated_at: new Date().toISOString() })
+              .eq("product_id", item.product.id)
+              .eq("location_id", storeLocation.id);
+          }
+        }
+
+        // Write sale audit log
+        await supabase.from("sale_audit_log" as any).insert({
+          sale_id: sale.id,
+          location_name: locationName,
+          employee_name: empData?.name || cashierName,
+          employee_card_code: empData?.employee_card_code || null,
+          product_base_id: item.product.base_id,
+          product_name: item.product.name,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          line_total: item.lineTotal,
+        });
 
         if (item.variantCode) {
           const { data: variant } = await supabase
@@ -318,6 +408,10 @@ export default function POS() {
 
       setShowFinalize(false);
       setShowReceipt(true);
+
+      // Invalidate store stock cache
+      queryClient.invalidateQueries({ queryKey: ["store-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["products-pos"] });
 
       toast({
         title: `✅ Vânzare finalizată: ${internalId}`,
@@ -587,18 +681,21 @@ export default function POS() {
           <DialogHeader><DialogTitle>Căutare produs</DialogTitle></DialogHeader>
           <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Caută după nume sau cod..." autoFocus />
           <div className="max-h-80 overflow-auto space-y-1">
-            {filteredProducts.map((product) => (
-              <button key={product.id} className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors text-left" onClick={() => handleAddFromSearch(product)}>
+            {filteredProducts.map((product) => {
+              const storeQty = getStoreStock(product.id);
+              return (
+              <button key={product.id} className={`w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors text-left ${storeQty <= 0 ? "opacity-50" : ""}`} onClick={() => handleAddFromSearch(product)} disabled={mode === "casier" && storeQty <= 0}>
                 <div>
                   <p className="font-medium">{product.name}</p>
                   <p className="text-xs text-muted-foreground">{product.base_id} • {product.category || "—"}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-bold">{product.selling_price.toFixed(2)} RON</p>
-                  <p className={`text-xs ${product.stock_general <= 0 ? "text-destructive" : "text-muted-foreground"}`}>Stoc: {product.stock_general}</p>
+                  <p className={`text-xs ${storeQty <= 0 ? "text-destructive" : "text-muted-foreground"}`}>Stoc magazin: {storeQty}</p>
                 </div>
               </button>
-            ))}
+              );
+            })}
             {searchQuery.length >= 2 && filteredProducts.length === 0 && (
               <p className="text-center text-muted-foreground py-8">Niciun produs găsit</p>
             )}

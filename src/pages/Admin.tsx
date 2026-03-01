@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -12,6 +12,7 @@ import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
 import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import InventarierTab from "@/components/admin/InventarierTab";
 import ImportInventoryTab from "@/components/admin/ImportInventoryTab";
+import TransferReportsTab from "@/components/admin/TransferReportsTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -305,7 +306,17 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="reports"><ReportsTab /></TabsContent>
+        <TabsContent value="reports">
+          <div className="space-y-4">
+            <ReportsTab />
+            <div className="border-t border-border pt-4">
+              <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4" />Raport Transferuri
+              </h3>
+              <TransferReportsTab />
+            </div>
+          </div>
+        </TabsContent>
 
         {/* Stock tab */}
         <TabsContent value="stock">

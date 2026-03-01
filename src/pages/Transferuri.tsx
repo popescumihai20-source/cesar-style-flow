@@ -26,7 +26,6 @@ export default function Transferuri() {
   const queryClient = useQueryClient();
   const scanRef = useRef<HTMLInputElement>(null);
 
-  // State
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
@@ -37,7 +36,6 @@ export default function Transferuri() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"new" | "history">("new");
 
-  // Fetch locations
   const { data: locations = [] } = useQuery({
     queryKey: ["inventory-locations"],
     queryFn: async () => {
@@ -51,7 +49,6 @@ export default function Transferuri() {
     },
   });
 
-  // Fetch products
   const { data: products = [] } = useQuery({
     queryKey: ["products-transfer"],
     queryFn: async () => {
@@ -61,7 +58,6 @@ export default function Transferuri() {
     },
   });
 
-  // Fetch stock for selected source location
   const { data: sourceStock = [] } = useQuery({
     queryKey: ["inventory-stock", fromLocationId],
     queryFn: async () => {
@@ -69,15 +65,13 @@ export default function Transferuri() {
       const { data, error } = await supabase
         .from("inventory_stock" as any)
         .select("*, products(name, base_id, full_barcode)")
-        .eq("location_id", fromLocationId)
-        .gt("quantity", 0);
+        .eq("location_id", fromLocationId);
       if (error) throw error;
       return data as any[];
     },
     enabled: !!fromLocationId,
   });
 
-  // Fetch transfer history
   const { data: history = [] } = useQuery({
     queryKey: ["transfer-history"],
     queryFn: async () => {
@@ -91,7 +85,6 @@ export default function Transferuri() {
     },
   });
 
-  // Keep scan input focused
   useEffect(() => {
     if (activeTab === "new" && fromLocationId && toLocationId) {
       scanRef.current?.focus();
@@ -99,11 +92,9 @@ export default function Transferuri() {
   }, [activeTab, fromLocationId, toLocationId, lines]);
 
   const findProductByBarcode = useCallback((barcode: string) => {
-    // Try full barcode match first
     let product = products.find((p: any) => p.full_barcode === barcode);
     if (product) return product;
 
-    // Try base_id from parsed barcode
     if (isValidBarcode(barcode)) {
       const parsed = parseBarcode(barcode);
       if (parsed.isValid) {
@@ -112,7 +103,6 @@ export default function Transferuri() {
       }
     }
 
-    // Try base_id direct match
     product = products.find((p: any) => p.base_id === barcode);
     return product || null;
   }, [products]);
@@ -125,9 +115,18 @@ export default function Transferuri() {
   const addProductToLines = useCallback((product: any) => {
     const available = getStockForProduct(product.id);
 
+    if (available <= 0) {
+      toast.error(`${product.name} — stoc 0 în locația sursă`);
+      return;
+    }
+
     setLines(prev => {
       const existing = prev.find(l => l.product_id === product.id);
       if (existing) {
+        if (existing.quantity + 1 > available) {
+          toast.error(`${product.name} — stoc insuficient (disponibil: ${available})`);
+          return prev;
+        }
         return prev.map(l =>
           l.product_id === product.id
             ? { ...l, quantity: l.quantity + 1, available_stock: available }
@@ -150,14 +149,18 @@ export default function Transferuri() {
     if (!trimmed) return;
     setScanInput("");
 
+    if (!fromLocationId || !toLocationId) {
+      toast.error("Selectează locația sursă și destinație înainte de scanare");
+      return;
+    }
+
     const product = findProductByBarcode(trimmed);
     if (product) {
       addProductToLines(product);
     } else {
-      toast.error(`Produs negăsit: ${trimmed}`);
+      toast.error(`Produs negăsit pentru codul: ${trimmed}`);
     }
 
-    // Re-focus
     setTimeout(() => scanRef.current?.focus(), 50);
   };
 
@@ -165,7 +168,14 @@ export default function Transferuri() {
     if (qty <= 0) {
       setLines(prev => prev.filter(l => l.id !== lineId));
     } else {
-      setLines(prev => prev.map(l => l.id === lineId ? { ...l, quantity: qty } : l));
+      setLines(prev => prev.map(l => {
+        if (l.id !== lineId) return l;
+        if (qty > l.available_stock) {
+          toast.error(`${l.product_name} — max ${l.available_stock} disponibil`);
+          return l;
+        }
+        return { ...l, quantity: qty };
+      }));
     }
   };
 
@@ -174,11 +184,34 @@ export default function Transferuri() {
   };
 
   const handleConfirmTransfer = async () => {
-    if (!fromLocationId || !toLocationId || lines.length === 0) return;
+    // Validations
+    if (!fromLocationId) {
+      toast.error("Selectează locația sursă");
+      return;
+    }
+    if (!toLocationId) {
+      toast.error("Selectează locația destinație");
+      return;
+    }
+    if (fromLocationId === toLocationId) {
+      toast.error("Locația sursă și destinație nu pot fi identice");
+      return;
+    }
+    if (lines.length === 0) {
+      toast.error("Adaugă cel puțin un produs");
+      return;
+    }
+    const invalidLines = lines.filter(l => l.quantity <= 0 || l.quantity > l.available_stock);
+    if (invalidLines.length > 0) {
+      toast.error("Verifică cantitățile — unele sunt invalide sau depășesc stocul");
+      return;
+    }
+
+    // Double-click guard
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      // Get current user's employee record
       const { data: { user } } = await supabase.auth.getUser();
       let employeeId: string | null = null;
       if (user) {
@@ -186,7 +219,6 @@ export default function Transferuri() {
         employeeId = emp?.id || null;
       }
 
-      // Create transfer header
       const { data: header, error: hErr } = await supabase
         .from("transfer_headers" as any)
         .insert({
@@ -200,7 +232,6 @@ export default function Transferuri() {
         .single();
       if (hErr) throw hErr;
 
-      // Create transfer lines
       const lineInserts = lines.map(l => ({
         transfer_id: (header as any).id,
         product_id: l.product_id,
@@ -211,7 +242,7 @@ export default function Transferuri() {
         .insert(lineInserts);
       if (lErr) throw lErr;
 
-      // Confirm transfer (atomic)
+      // Confirm transfer (atomic - audit log written server-side)
       const { error: cErr } = await supabase.rpc("confirm_transfer", {
         p_transfer_id: (header as any).id,
       });
@@ -219,17 +250,17 @@ export default function Transferuri() {
 
       toast.success(`Transfer confirmat: ${lines.reduce((s, l) => s + l.quantity, 0)} produse mutate`);
 
-      // Reset
       setLines([]);
       setNote("");
       queryClient.invalidateQueries({ queryKey: ["inventory-stock"] });
       queryClient.invalidateQueries({ queryKey: ["transfer-history"] });
+      queryClient.invalidateQueries({ queryKey: ["transfer-audit-logs"] });
       queryClient.invalidateQueries({ queryKey: ["products-transfer"] });
       queryClient.invalidateQueries({ queryKey: ["products-admin"] });
       queryClient.invalidateQueries({ queryKey: ["products-pos"] });
       queryClient.invalidateQueries({ queryKey: ["products-depozit"] });
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || "Eroare la confirmare transfer");
     }
     setIsSubmitting(false);
   };
@@ -256,18 +287,10 @@ export default function Transferuri() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant={activeTab === "new" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("new")}
-          >
+          <Button variant={activeTab === "new" ? "default" : "outline"} size="sm" onClick={() => setActiveTab("new")}>
             <Plus className="h-4 w-4 mr-1" />Transfer Nou
           </Button>
-          <Button
-            variant={activeTab === "history" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("history")}
-          >
+          <Button variant={activeTab === "history" ? "default" : "outline"} size="sm" onClick={() => setActiveTab("history")}>
             Istoric
           </Button>
         </div>
@@ -275,7 +298,6 @@ export default function Transferuri() {
 
       {activeTab === "new" && (
         <div className="space-y-4">
-          {/* Location selection */}
           <Card>
             <CardContent className="p-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -309,7 +331,6 @@ export default function Transferuri() {
             </CardContent>
           </Card>
 
-          {/* Scan input */}
           {fromLocationId && toLocationId && (
             <Card>
               <CardContent className="p-4 space-y-3">
@@ -334,7 +355,6 @@ export default function Transferuri() {
             </Card>
           )}
 
-          {/* Transfer lines */}
           {lines.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
@@ -384,7 +404,6 @@ export default function Transferuri() {
             </Card>
           )}
 
-          {/* Note + confirm */}
           {lines.length > 0 && (
             <Card>
               <CardContent className="p-4 space-y-3">
@@ -395,17 +414,13 @@ export default function Transferuri() {
                   className="h-16"
                 />
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => { setLines([]); setNote(""); }}
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => { setLines([]); setNote(""); }}>
                     <XCircle className="h-4 w-4 mr-1" />Anulează
                   </Button>
                   <Button
                     className="flex-1"
                     onClick={handleConfirmTransfer}
-                    disabled={isSubmitting || lines.some(l => l.quantity > l.available_stock)}
+                    disabled={isSubmitting || lines.some(l => l.quantity > l.available_stock) || lines.some(l => l.quantity <= 0)}
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
                     {isSubmitting ? "Se procesează..." : "Confirmă Transfer"}
@@ -420,7 +435,6 @@ export default function Transferuri() {
         </div>
       )}
 
-      {/* History tab */}
       {activeTab === "history" && (
         <Card>
           <CardHeader className="pb-2">
@@ -457,8 +471,7 @@ export default function Transferuri() {
                     <TableCell className="text-sm">{t.employees?.name || "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{t.note || "—"}</TableCell>
                   </TableRow>
-                ))
-                }
+                ))}
                 {history.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
@@ -472,7 +485,6 @@ export default function Transferuri() {
         </Card>
       )}
 
-      {/* Search dialog */}
       <Dialog open={showSearch} onOpenChange={setShowSearch}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Caută produs</DialogTitle></DialogHeader>
@@ -490,12 +502,15 @@ export default function Transferuri() {
                   key={p.id}
                   className="w-full flex justify-between p-3 rounded-lg hover:bg-muted text-left"
                   onClick={() => { addProductToLines(p); setShowSearch(false); setTimeout(() => scanRef.current?.focus(), 50); }}
+                  disabled={stock <= 0}
                 >
                   <div>
                     <p className="font-medium">{p.name}</p>
                     <p className="text-xs text-muted-foreground">{p.base_id}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">Stoc: {stock}</p>
+                  <p className={`text-sm ${stock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    Stoc: {stock}
+                  </p>
                 </button>
               );
             })}
