@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ProductVariantsEditor } from "@/components/products/ProductVariantsEditor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const CATEGORIES = ["Costume", "Sacouri", "Pantaloni", "Camasi", "Tricouri", "Pulovere", "Geci", "Paltoane", "Incaltaminte", "Veste", "Accesorii"];
 const SEASONS: Array<{ value: string; label: string }> = [
@@ -206,6 +207,7 @@ export default function Produse() {
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -300,7 +302,16 @@ export default function Produse() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className={`font-mono text-xs ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.base_id}</TableCell>
+                      <TableCell className={`font-mono text-xs ${isZeroStock ? "text-muted-foreground" : ""}`}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="font-mono text-sm">
+                            {p.base_id}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell className={`font-medium ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.brand || "—"}</TableCell>
@@ -364,7 +375,16 @@ export default function Produse() {
                     const isZeroDepozit = (p.stock_depozit ?? 0) <= 0;
                     return (
                     <TableRow key={p.id} className={isZeroDepozit ? "opacity-60" : ""}>
-                      <TableCell className={`font-mono text-xs ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.base_id}</TableCell>
+                      <TableCell className={`font-mono text-xs ${isZeroDepozit ? "text-muted-foreground" : ""}`}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="font-mono text-sm">
+                            {p.base_id}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell className={`font-medium ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
                       <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
                       <TableCell className={`text-right font-mono font-bold ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.stock_depozit ?? 0}</TableCell>
@@ -470,5 +490,6 @@ export default function Produse() {
         </Dialog>
       )}
     </div>
+    </TooltipProvider>
   );
 }
