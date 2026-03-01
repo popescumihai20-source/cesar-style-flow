@@ -1037,6 +1037,7 @@ export type Database = {
     }
     Functions: {
       generate_sale_internal_id: { Args: never; Returns: string }
+      get_admin_kpis: { Args: never; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
