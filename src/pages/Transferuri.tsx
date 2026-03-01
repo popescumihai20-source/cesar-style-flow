@@ -107,13 +107,51 @@ export default function Transferuri() {
     return product || null;
   }, [products]);
 
+  const fetchProductByBarcode = useCallback(async (barcode: string) => {
+    const parsed = isValidBarcode(barcode) ? parseBarcode(barcode) : null;
+    const baseId = parsed?.isValid ? parsed.baseId : barcode;
+
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .or(`base_id.eq.${baseId},full_barcode.eq.${barcode}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Transferuri] Product lookup error:", error);
+      return null;
+    }
+
+    return data as any;
+  }, []);
+
   const getStockForProduct = useCallback((productId: string) => {
     const stockEntry = sourceStock.find((s: any) => s.product_id === productId);
     return stockEntry?.quantity ?? 0;
   }, [sourceStock]);
 
-  const addProductToLines = useCallback((product: any) => {
-    const available = getStockForProduct(product.id);
+  const fetchFreshSourceStock = useCallback(async (productId: string) => {
+    if (!fromLocationId) return 0;
+
+    const { data, error } = await supabase
+      .from("inventory_stock" as any)
+      .select("quantity")
+      .eq("location_id", fromLocationId)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Transferuri] Stock lookup error:", error);
+      return getStockForProduct(productId);
+    }
+
+    return (data as any)?.quantity ?? 0;
+  }, [fromLocationId, getStockForProduct]);
+
+  const addProductToLines = useCallback(async (product: any) => {
+    const available = await fetchFreshSourceStock(product.id);
 
     if (available <= 0) {
       toast.error(`${product.name} — stoc 0 în locația sursă`);
@@ -142,9 +180,9 @@ export default function Transferuri() {
         available_stock: available,
       }];
     });
-  }, [getStockForProduct]);
+  }, [fetchFreshSourceStock]);
 
-  const handleScan = () => {
+  const handleScan = async () => {
     const trimmed = scanInput.trim();
     if (!trimmed) return;
     setScanInput("");
@@ -154,9 +192,13 @@ export default function Transferuri() {
       return;
     }
 
-    const product = findProductByBarcode(trimmed);
+    let product = findProductByBarcode(trimmed);
+    if (!product) {
+      product = await fetchProductByBarcode(trimmed);
+    }
+
     if (product) {
-      addProductToLines(product);
+      await addProductToLines(product);
     } else {
       toast.error(`Produs negăsit pentru codul: ${trimmed}`);
     }
@@ -501,8 +543,8 @@ export default function Transferuri() {
                 <button
                   key={p.id}
                   className="w-full flex justify-between p-3 rounded-lg hover:bg-muted text-left"
-                  onClick={() => { addProductToLines(p); setShowSearch(false); setTimeout(() => scanRef.current?.focus(), 50); }}
-                  disabled={stock <= 0}
+                  onClick={async () => { await addProductToLines(p); setShowSearch(false); setTimeout(() => scanRef.current?.focus(), 50); }}
+                  disabled={false}
                 >
                   <div>
                     <p className="font-medium">{p.name}</p>

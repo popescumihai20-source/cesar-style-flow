@@ -135,6 +135,23 @@ export default function POS() {
     return (data as any)?.quantity ?? 0;
   }, [storeLocation?.id, getStoreStock]);
 
+  const fetchProductByScanCode = useCallback(async (scannedCode: string, baseId: string) => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .or(`base_id.eq.${baseId},full_barcode.eq.${scannedCode}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[POS] Product lookup error:", error);
+      return null;
+    }
+
+    return (data as Product | null) ?? null;
+  }, []);
+
   // Filter products for search
   const filteredProducts = searchQuery.length >= 2
     ? products.filter(p =>
@@ -222,7 +239,11 @@ export default function POS() {
 
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
-      const product = products.find(p => p.base_id === parsed.baseId);
+      let product = products.find(p => p.base_id === parsed.baseId);
+      if (!product) {
+        product = await fetchProductByScanCode(trimmed, parsed.baseId);
+      }
+
       if (product) {
         const storeQty = await fetchFreshStoreStock(product.id);
         const inCart = cart.filter(c => c.product.id === product.id).reduce((s, c) => s + c.quantity, 0);
@@ -254,7 +275,7 @@ export default function POS() {
     }
 
     setScanInput("");
-  }, [mode, products, cart, addToCart, recordActivity, toast, fetchFreshStoreStock, isStoreLocationLoading, isStoreStockLoading, storeLocation?.id]);
+  }, [mode, products, cart, addToCart, recordActivity, toast, fetchFreshStoreStock, fetchProductByScanCode, isStoreLocationLoading, isStoreStockLoading, storeLocation?.id]);
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
