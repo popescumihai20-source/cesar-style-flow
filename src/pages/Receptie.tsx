@@ -166,6 +166,24 @@ export default function Receptie() {
           quantity: row.quantity,
           cost_price: row.costPrice,
         });
+
+        // Also update inventory_stock for the store location
+        const { data: storeLoc } = await supabase
+          .from("inventory_locations" as any)
+          .select("id")
+          .eq("type", "store")
+          .limit(1)
+          .single();
+        if (storeLoc) {
+          const { error: stockErr } = await supabase
+            .from("inventory_stock" as any)
+            .upsert({
+              product_id: productId,
+              location_id: (storeLoc as any).id,
+              quantity: (existing ? existing.stock_general : 0) + row.quantity,
+            }, { onConflict: "product_id,location_id" });
+          if (stockErr) console.error("inventory_stock sync error:", stockErr);
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: ["products-pos"] });

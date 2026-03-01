@@ -379,6 +379,30 @@ export type Database = {
           },
         ]
       }
+      inventory_locations: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: []
+      }
       inventory_sessions: {
         Row: {
           created_at: string
@@ -416,6 +440,45 @@ export type Database = {
             columns: ["started_by"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_stock: {
+        Row: {
+          id: string
+          location_id: string
+          product_id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          location_id: string
+          product_id: string
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          location_id?: string
+          product_id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_stock_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_stock_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1013,6 +1076,100 @@ export type Database = {
         }
         Relationships: []
       }
+      transfer_headers: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          created_by_employee_id: string | null
+          from_location_id: string
+          id: string
+          note: string | null
+          status: string
+          to_location_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by_employee_id?: string | null
+          from_location_id: string
+          id?: string
+          note?: string | null
+          status?: string
+          to_location_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by_employee_id?: string | null
+          from_location_id?: string
+          id?: string
+          note?: string | null
+          status?: string
+          to_location_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_headers_created_by_employee_id_fkey"
+            columns: ["created_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_headers_from_location_id_fkey"
+            columns: ["from_location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_headers_to_location_id_fkey"
+            columns: ["to_location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transfer_lines: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          quantity: number
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity: number
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_lines_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "transfer_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -1036,6 +1193,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      confirm_transfer: { Args: { p_transfer_id: string }; Returns: undefined }
       generate_sale_internal_id: { Args: never; Returns: string }
       get_admin_kpis: { Args: never; Returns: Json }
       has_role: {
