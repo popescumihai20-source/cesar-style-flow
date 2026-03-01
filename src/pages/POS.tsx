@@ -78,7 +78,7 @@ export default function POS() {
   });
 
   // Fetch store location
-  const { data: storeLocation } = useQuery({
+  const { data: storeLocation, isLoading: isStoreLocationLoading } = useQuery({
     queryKey: ["store-location"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -95,7 +95,7 @@ export default function POS() {
   });
 
   // Fetch inventory_stock for the store location
-  const { data: storeStock = [] } = useQuery({
+  const { data: storeStock = [], isLoading: isStoreStockLoading } = useQuery({
     queryKey: ["store-stock", storeLocation?.id],
     queryFn: async () => {
       if (!storeLocation?.id) return [];
@@ -175,6 +175,16 @@ export default function POS() {
     }
 
     // CASIER mode — add product to cart
+    if (isStoreLocationLoading || isStoreStockLoading) {
+      toast({
+        title: "Se încarcă stocul",
+        description: "Încearcă din nou în 1-2 secunde.",
+        variant: "destructive"
+      });
+      setScanInput("");
+      return;
+    }
+
     if (!isValidBarcode(trimmed)) {
       toast({ title: "Cod invalid", description: `Codul trebuie să aibă exact 17 cifre numerice`, variant: "destructive" });
       setScanInput("");
@@ -201,6 +211,8 @@ export default function POS() {
             description: `${product.name} — disponibil: ${storeQty}, în coș: ${inCart}`,
             variant: "destructive",
           });
+          setScanInput("");
+          return;
         }
         addToCart(product, null, null);
       } else {
@@ -208,7 +220,7 @@ export default function POS() {
       }
     }
     setScanInput("");
-  }, [mode, products, cart, addToCart, recordActivity, toast]);
+  }, [mode, products, cart, addToCart, recordActivity, toast, getStoreStock, isStoreLocationLoading, isStoreStockLoading]);
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
