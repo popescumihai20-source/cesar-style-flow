@@ -526,6 +526,7 @@ export type Database = {
           category: string | null
           cost_price: number
           created_at: string
+          full_barcode: string | null
           id: string
           images: string[] | null
           last_received_at: string | null
@@ -544,6 +545,7 @@ export type Database = {
           category?: string | null
           cost_price?: number
           created_at?: string
+          full_barcode?: string | null
           id?: string
           images?: string[] | null
           last_received_at?: string | null
@@ -562,6 +564,7 @@ export type Database = {
           category?: string | null
           cost_price?: number
           created_at?: string
+          full_barcode?: string | null
           id?: string
           images?: string[] | null
           last_received_at?: string | null
