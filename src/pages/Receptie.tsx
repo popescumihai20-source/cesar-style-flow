@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { Truck, Plus, Trash2, CheckCircle } from "lucide-react";
+import { Truck, Plus, Trash2, CheckCircle, Barcode } from "lucide-react";
 import { ExcelImport, type ExcelRow } from "@/components/receptie/ExcelImport";
+import { NewProductModal, type GeneratedProduct } from "@/components/receptie/NewProductModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { generateBarcode } from "@/lib/barcode-parser";
@@ -57,6 +58,7 @@ export default function Receptie() {
   const [rows, setRows] = useState<ReceiptRow[]>([]);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -96,6 +98,28 @@ export default function Receptie() {
 
   const removeRow = useCallback((id: string) => {
     setRows(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const handleNewProduct = useCallback((product: GeneratedProduct) => {
+    const entryDate = product.dateStr;
+    // Parse DDMMYY to DD/MM/20YY for the date field
+    const formattedDate = `${entryDate.substring(0,2)}/${entryDate.substring(2,4)}/20${entryDate.substring(4,6)}`;
+    const newRows: ReceiptRow[] = [];
+    for (let i = 0; i < product.quantity; i++) {
+      newRows.push({
+        id: crypto.randomUUID(),
+        articolCode: product.articolCode,
+        modelCode: product.colorCode,
+        producatorCode: product.producatorCode,
+        permanent: product.permanent,
+        dataReceptie: formattedDate,
+        sellingPrice: product.labelPrice,
+        costPrice: product.costPrice,
+        quantity: 1,
+      });
+    }
+    setRows(prev => [...newRows, ...prev]);
+    console.log(`[Recepție] Added ${product.quantity} rows from modal, barcode=${product.barcode}`);
   }, []);
 
   const updateRow = useCallback((id: string, updates: Partial<ReceiptRow>) => {
@@ -209,6 +233,9 @@ export default function Receptie() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="default" onClick={() => setShowNewProductModal(true)}>
+            <Barcode className="h-4 w-4 mr-1" />Primește produse noi + Generează coduri
+          </Button>
           <ExcelImport onImport={handleExcelImport} />
           <Button variant="outline" size="sm" onClick={addRow}><Plus className="h-4 w-4 mr-1" />Adaugă Rând</Button>
           <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || rows.length === 0}>
@@ -326,6 +353,12 @@ export default function Receptie() {
           <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observații, furnizor, nr. factură..." className="mt-1" />
         </CardContent>
       </Card>
+
+      <NewProductModal
+        open={showNewProductModal}
+        onOpenChange={setShowNewProductModal}
+        onGenerate={handleNewProduct}
+      />
     </div>
   );
 }

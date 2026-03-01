@@ -424,7 +424,7 @@ export default function Produse() {
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Base ID</Label><Input value={form.base_id} onChange={e => setForm({...form, base_id: e.target.value})} disabled={!!editingProduct} /></div>
+              <div><Label>Base ID</Label><Input value={form.base_id} onChange={e => setForm({...form, base_id: e.target.value})} disabled className="bg-muted" /></div>
               <div><Label>Nume</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
