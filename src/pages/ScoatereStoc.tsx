@@ -139,7 +139,26 @@ export default function ScoatereStoc() {
     setPinLoginInput("");
   };
 
-  const handleProductScan = () => {
+  const fetchProductByBarcode = async (barcode: string) => {
+    const parsed = isValidBarcode(barcode) ? parseBarcode(barcode) : null;
+    const baseId = parsed?.isValid ? parsed.baseId : barcode;
+
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .eq("base_id", baseId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[ScoatereStoc] Product lookup error:", error);
+      return null;
+    }
+
+    return data;
+  };
+
+  const handleProductScan = async () => {
     const trimmed = scanInput.trim();
     if (!isValidBarcode(trimmed)) {
       toast({ title: "Cod invalid", description: `Codul trebuie să aibă exact 17 cifre numerice`, variant: "destructive" });
@@ -148,7 +167,11 @@ export default function ScoatereStoc() {
     }
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
-      const product = products.find(p => p.base_id === parsed.baseId);
+      let product = products.find(p => p.base_id === parsed.baseId);
+      if (!product) {
+        product = await fetchProductByBarcode(trimmed) as any;
+      }
+
       if (product) {
         setSelectedProduct(product);
         setVariantCode("");
