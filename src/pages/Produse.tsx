@@ -48,9 +48,27 @@ export default function Produse() {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["products-admin"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
-      if (error) throw error;
-      return data;
+      const pageSize = 1000;
+      let from = 0;
+      const allProducts: Product[] = [];
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .order("name")
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allProducts.push(...(data as Product[]));
+
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allProducts;
     },
   });
 
