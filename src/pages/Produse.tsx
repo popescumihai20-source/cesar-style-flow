@@ -308,7 +308,7 @@ export default function Produse() {
                             <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="font-mono text-sm">
-                            {p.base_id}
+                            {(p as any).full_barcode || p.base_id}
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>
@@ -381,7 +381,7 @@ export default function Produse() {
                             <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="font-mono text-sm">
-                            {p.base_id}
+                            {(p as any).full_barcode || p.base_id}
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>

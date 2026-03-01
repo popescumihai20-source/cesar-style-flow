@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
     }
 
     // Aggregate by base_id (first 7 digits)
-    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number }>();
+    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number; fullBarcode: string }>();
     for (const line of lines) {
       const baseId = line.barcode.substring(0, 7);
       const price = parseInt(line.barcode.substring(13, 17), 10);
@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
       if (existing) {
         existing.totalQty += line.quantity;
       } else {
-        aggregated.set(baseId, { baseId, description: line.description, totalQty: line.quantity, price });
+        aggregated.set(baseId, { baseId, description: line.description, totalQty: line.quantity, price, fullBarcode: line.barcode });
       }
     }
 
@@ -213,9 +213,12 @@ Deno.serve(async (req) => {
       const existingId = existingMap.get(baseId);
       if (existingId) {
         // Update ONLY the target stock field
+        const updateData: Record<string, unknown> = { [stockField]: item.totalQty, active: true };
+        // Save full_barcode if not already set
+        updateData.full_barcode = item.fullBarcode;
         const { error } = await supabase
           .from("products")
-          .update({ [stockField]: item.totalQty, active: true })
+          .update(updateData)
           .eq("id", existingId);
         if (!error) updated++;
         else console.error(`Update error for ${baseId}:`, error.message);
@@ -228,6 +231,7 @@ Deno.serve(async (req) => {
           cost_price: 0,
           stock_depozit: stockField === "stock_depozit" ? item.totalQty : 0,
           stock_general: stockField === "stock_general" ? item.totalQty : 0,
+          full_barcode: item.fullBarcode,
           active: true,
         };
         const { error } = await supabase.from("products").insert(newProduct);
