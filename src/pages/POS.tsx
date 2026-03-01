@@ -110,11 +110,30 @@ export default function POS() {
     staleTime: 30 * 1000,
   });
 
-  // Helper to get store stock for a product
+  // Helper to get cached store stock for a product
   const getStoreStock = useCallback((productId: string) => {
     const entry = storeStock.find((s: any) => s.product_id === productId);
     return entry?.quantity ?? 0;
   }, [storeStock]);
+
+  // Always check live stock for a product (avoids large-list cache/limit issues)
+  const fetchFreshStoreStock = useCallback(async (productId: string) => {
+    if (!storeLocation?.id) return 0;
+
+    const { data, error } = await supabase
+      .from("inventory_stock" as any)
+      .select("quantity")
+      .eq("location_id", storeLocation.id)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[POS] Stock lookup error:", error);
+      return getStoreStock(productId);
+    }
+
+    return (data as any)?.quantity ?? 0;
+  }, [storeLocation?.id, getStoreStock]);
 
   // Filter products for search
   const filteredProducts = searchQuery.length >= 2
@@ -185,17 +204,29 @@ export default function POS() {
       return;
     }
 
+    if (!storeLocation?.id) {
+      toast({
+        title: "Lipsă locație magazin",
+        description: "Nu există o locație de tip magazin activă.",
+        variant: "destructive"
+      });
+      setScanInput("");
+      return;
+    }
+
     if (!isValidBarcode(trimmed)) {
       toast({ title: "Cod invalid", description: `Codul trebuie să aibă exact 17 cifre numerice`, variant: "destructive" });
       setScanInput("");
       return;
     }
+
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
       const product = products.find(p => p.base_id === parsed.baseId);
       if (product) {
-        const storeQty = getStoreStock(product.id);
+        const storeQty = await fetchFreshStoreStock(product.id);
         const inCart = cart.filter(c => c.product.id === product.id).reduce((s, c) => s + c.quantity, 0);
+
         if (storeQty <= 0) {
           toast({
             title: "⛔ Stoc 0 în magazin",
@@ -205,6 +236,7 @@ export default function POS() {
           setScanInput("");
           return;
         }
+
         if (inCart + 1 > storeQty) {
           toast({
             title: "⚠️ Stoc insuficient",
@@ -214,13 +246,15 @@ export default function POS() {
           setScanInput("");
           return;
         }
+
         addToCart(product, null, null);
       } else {
         toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId}`, variant: "destructive" });
       }
     }
+
     setScanInput("");
-  }, [mode, products, cart, addToCart, recordActivity, toast, getStoreStock, isStoreLocationLoading, isStoreStockLoading]);
+  }, [mode, products, cart, addToCart, recordActivity, toast, fetchFreshStoreStock, isStoreLocationLoading, isStoreStockLoading, storeLocation?.id]);
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -250,16 +284,23 @@ export default function POS() {
   };
 
   // Add product from search
-  const handleAddFromSearch = (product: Product) => {
+  const handleAddFromSearch = async (product: Product) => {
     if (mode !== "casier") {
       setShowSearch(false);
       return;
     }
-    const storeQty = getStoreStock(product.id);
+
+    if (!storeLocation?.id) {
+      toast({ title: "Lipsă locație magazin", description: "Nu există o locație de tip magazin activă.", variant: "destructive" });
+      return;
+    }
+
+    const storeQty = await fetchFreshStoreStock(product.id);
     if (storeQty <= 0) {
       toast({ title: "⛔ Stoc 0 în magazin", description: `${product.name} — nu poate fi adăugat`, variant: "destructive" });
       return;
     }
+
     addToCart(product, null, null);
     setShowSearch(false);
     setSearchQuery("");
