@@ -76,11 +76,13 @@ export default function Produse() {
   });
 
   const filtered = products.filter(p => {
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search)) return false;
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
     if (seasonFilter !== "all" && p.seasonal_tag !== seasonFilter) return false;
     if (activeFilter === "active" && !p.active) return false;
     if (activeFilter === "inactive" && p.active) return false;
+    // Magazin tab: only show products with stock in magazin
+    if (p.stock_general <= 0) return false;
     return true;
   });
 
