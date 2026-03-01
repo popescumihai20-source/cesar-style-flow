@@ -194,7 +194,7 @@ export default function Receptie() {
         // Also update inventory_stock for the store location
         const { data: storeLoc } = await supabase
           .from("inventory_locations" as any)
-          .select("id")
+          .select("id, name")
           .eq("type", "store")
           .limit(1)
           .single();
@@ -208,6 +208,27 @@ export default function Receptie() {
             }, { onConflict: "product_id,location_id" });
           if (stockErr) console.error("inventory_stock sync error:", stockErr);
         }
+
+        // Generate barcode for audit
+        const genBarcode = generateBarcode(
+          row.articolCode, row.modelCode, row.producatorCode,
+          row.permanent, entryDate, Math.round(row.sellingPrice)
+        );
+        const productName = existing
+          ? (await supabase.from("products").select("name").eq("id", productId).single()).data?.name || baseId
+          : `${articolEntries.find(a => a.code === row.articolCode)?.name || row.articolCode} ${activeColors.find(c => c.code === row.modelCode)?.name || row.modelCode} ${activeProducatori.find(p => p.code === row.producatorCode)?.name || row.producatorCode}`;
+
+        // Write receiving audit log
+        await supabase.from("receiving_audit_log" as any).insert({
+          receipt_id: receipt.id,
+          product_id: productId,
+          barcode: genBarcode,
+          base_id: baseId,
+          product_name: productName,
+          quantity: row.quantity,
+          location_name: (storeLoc as any)?.name || "Magazin",
+        });
+        console.log(`[Recepție Audit] barcode=${genBarcode}, qty=${row.quantity}, product=${productName}`);
       }
 
       queryClient.invalidateQueries({ queryKey: ["products-pos"] });
