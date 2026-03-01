@@ -305,7 +305,7 @@ export default function Produse() {
                       <TableCell className={`font-mono text-xs ${isZeroStock ? "text-muted-foreground" : ""}`}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
+                            <span className="cursor-pointer underline decoration-dotted">{(p as any).full_barcode || p.base_id}</span>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="font-mono text-sm">
                             {(p as any).full_barcode || p.base_id}
@@ -378,7 +378,7 @@ export default function Produse() {
                       <TableCell className={`font-mono text-xs ${isZeroDepozit ? "text-muted-foreground" : ""}`}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-pointer underline decoration-dotted">{p.base_id}</span>
+                            <span className="cursor-pointer underline decoration-dotted">{(p as any).full_barcode || p.base_id}</span>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="font-mono text-sm">
                             {(p as any).full_barcode || p.base_id}
