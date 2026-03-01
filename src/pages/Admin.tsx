@@ -31,6 +31,28 @@ export default function Admin() {
   const [fiscalInput, setFiscalInput] = useState("");
   const [activeTab, setActiveTab] = useState("sales");
 
+  // KPI data from DB (accurate, no row limits)
+  const { data: kpis } = useQuery({
+    queryKey: ["admin-kpis"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_admin_kpis");
+      if (error) throw error;
+      return data as {
+        total_products: number;
+        active_products: number;
+        low_stock_count: number;
+        zero_stock_count: number;
+        sales_today_count: number;
+        sales_today_total: number;
+        sales_week_count: number;
+        sales_week_total: number;
+        sales_month_count: number;
+        sales_month_total: number;
+        pending_fiscal: number;
+      };
+    },
+  });
+
   const { data: sales = [] } = useQuery({
     queryKey: ["admin-sales"],
     queryFn: async () => {
@@ -43,9 +65,18 @@ export default function Admin() {
   const { data: products = [] } = useQuery({
     queryKey: ["products-admin"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
-      if (error) throw error;
-      return data;
+      const pageSize = 1000;
+      let from = 0;
+      const all: any[] = [];
+      while (true) {
+        const { data, error } = await supabase.from("products").select("*").order("name").range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
   });
 
@@ -119,21 +150,9 @@ export default function Admin() {
     onError: (err: any) => toast({ title: "Eroare la anulare", description: err.message, variant: "destructive" }),
   });
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const lowStockProducts = products.filter(p => p.stock_general > 0 && p.stock_general <= 3 && p.active);
 
-  const salesToday = sales.filter(s => s.created_at >= todayStart);
-  const salesWeek = sales.filter(s => s.created_at >= weekStart);
-  const salesMonth = sales.filter(s => s.created_at >= monthStart);
 
-  const totalToday = salesToday.reduce((s, sale) => s + sale.total, 0);
-  const totalWeek = salesWeek.reduce((s, sale) => s + sale.total, 0);
-  const totalMonth = salesMonth.reduce((s, sale) => s + sale.total, 0);
-
-  const lowStockProducts = products.filter(p => p.stock_general <= 3 && p.active);
-  const pendingFiscal = sales.filter(s => s.status === "pending_fiscal");
 
   const exportTable = (name: string, headers: string[], rows: any[][]) => {
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
@@ -157,44 +176,44 @@ export default function Admin() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Vânzări Azi</p>
-            <p className="text-2xl font-bold font-mono text-gold-gradient">{totalToday.toFixed(0)} <span className="text-sm">RON</span></p>
-            <p className="text-xs text-muted-foreground">{salesToday.length} bonuri</p>
+            <p className="text-2xl font-bold font-mono text-gold-gradient">{(kpis?.sales_today_total ?? 0).toFixed(0)} <span className="text-sm">RON</span></p>
+            <p className="text-xs text-muted-foreground">{kpis?.sales_today_count ?? 0} bonuri</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Vânzări Săptămână</p>
-            <p className="text-2xl font-bold font-mono">{totalWeek.toFixed(0)} <span className="text-sm">RON</span></p>
-            <p className="text-xs text-muted-foreground">{salesWeek.length} bonuri</p>
+            <p className="text-2xl font-bold font-mono">{(kpis?.sales_week_total ?? 0).toFixed(0)} <span className="text-sm">RON</span></p>
+            <p className="text-xs text-muted-foreground">{kpis?.sales_week_count ?? 0} bonuri</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Vânzări Lună</p>
-            <p className="text-2xl font-bold font-mono">{totalMonth.toFixed(0)} <span className="text-sm">RON</span></p>
-            <p className="text-xs text-muted-foreground">{salesMonth.length} bonuri</p>
+            <p className="text-2xl font-bold font-mono">{(kpis?.sales_month_total ?? 0).toFixed(0)} <span className="text-sm">RON</span></p>
+            <p className="text-xs text-muted-foreground">{kpis?.sales_month_count ?? 0} bonuri</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Total Produse</p>
-            <p className="text-2xl font-bold font-mono">{products.length}</p>
-            <p className="text-xs text-muted-foreground">{products.filter(p => p.active).length} active</p>
+            <p className="text-2xl font-bold font-mono">{kpis?.total_products ?? 0}</p>
+            <p className="text-xs text-muted-foreground">{kpis?.active_products ?? 0} active</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Alerts */}
-      {(lowStockProducts.length > 0 || pendingFiscal.length > 0) && (
+      {((kpis?.low_stock_count ?? 0) > 0 || (kpis?.pending_fiscal ?? 0) > 0) && (
         <div className="flex flex-wrap gap-2">
-          {lowStockProducts.length > 0 && (
+          {(kpis?.low_stock_count ?? 0) > 0 && (
             <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="h-3 w-3" />{lowStockProducts.length} produse stoc scăzut
+              <AlertTriangle className="h-3 w-3" />{kpis?.low_stock_count} produse stoc scăzut (1-3 buc)
             </Badge>
           )}
-          {pendingFiscal.length > 0 && (
+          {(kpis?.pending_fiscal ?? 0) > 0 && (
             <Badge variant="secondary" className="gap-1">
-              <Receipt className="h-3 w-3" />{pendingFiscal.length} vânzări pending fiscal
+              <Receipt className="h-3 w-3" />{kpis?.pending_fiscal} vânzări pending fiscal
             </Badge>
           )}
         </div>
