@@ -7,6 +7,7 @@ import BulineTab from "@/components/admin/BulineTab";
 import ReportsTab from "@/components/admin/ReportsTab";
 import CustomersTab from "@/components/admin/CustomersTab";
 import ArticolDictionaryTab from "@/components/admin/ArticolDictionaryTab";
+import ProducatorDictionaryTab from "@/components/admin/ProducatorDictionaryTab";
 import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
 import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import InventarierTab from "@/components/admin/InventarierTab";
@@ -210,6 +211,7 @@ export default function Admin() {
             <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
             <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
             <TabsTrigger value="articole"><BookOpen className="h-3 w-3 mr-1" />Articole</TabsTrigger>
+            <TabsTrigger value="producatori">Producători</TabsTrigger>
           </TabsList>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -328,6 +330,7 @@ export default function Admin() {
         <TabsContent value="buline"><BulineTab /></TabsContent>
         <TabsContent value="customers"><CustomersTab /></TabsContent>
         <TabsContent value="articole"><ArticolDictionaryTab /></TabsContent>
+        <TabsContent value="producatori"><ProducatorDictionaryTab /></TabsContent>
         <TabsContent value="depozit"><DepozitTab /></TabsContent>
         <TabsContent value="barcode-gen"><BarcodeGeneratorTab /></TabsContent>
         <TabsContent value="inventariere"><InventarierTab /></TabsContent>

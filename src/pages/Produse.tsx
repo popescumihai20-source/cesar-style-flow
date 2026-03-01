@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Product } from "@/types/pos";
+import { useProducatorDictionary } from "@/hooks/use-producator-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ export default function Produse() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { activeProducatori } = useProducatorDictionary();
 
   const [form, setForm] = useState({
     base_id: "", name: "", category: "", brand: "",
@@ -312,7 +314,14 @@ export default function Produse() {
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell className={`font-medium ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
+                      <TableCell className={`font-medium ${isZeroStock ? "text-muted-foreground" : ""}`}>
+                        {p.name}
+                        {(() => {
+                          const prodCode = p.base_id?.substring(4, 6);
+                          const prodName = activeProducatori.find(pr => pr.code === prodCode)?.name;
+                          return prodName ? <span className="block text-[10px] text-muted-foreground font-normal">{prodName}</span> : null;
+                        })()}
+                      </TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.brand || "—"}</TableCell>
                       <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.selling_price.toFixed(2)}</TableCell>
