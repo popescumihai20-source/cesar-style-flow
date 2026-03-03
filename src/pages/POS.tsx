@@ -53,6 +53,7 @@ export default function POS() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [amountReceived, setAmountReceived] = useState<number>(0);
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const scanProcessingRef = useRef(false);
   const { toast } = useToast();
   const { getArticolLabel } = useArticolDictionary();
   const { isLocked: isMagazinLocked } = useInventoryLock("magazin");
@@ -135,12 +136,12 @@ export default function POS() {
     return (data as any)?.quantity ?? 0;
   }, [storeLocation?.id, getStoreStock]);
 
-  const fetchProductByScanCode = useCallback(async (scannedCode: string, baseId: string) => {
+  const fetchProductByScanCode = useCallback(async (scannedCode: string) => {
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .eq("active", true)
-      .or(`base_id.eq.${baseId},full_barcode.eq.${scannedCode}`)
+      .eq("full_barcode", scannedCode)
       .limit(1)
       .maybeSingle();
 
@@ -239,9 +240,9 @@ export default function POS() {
 
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
-      let product = products.find(p => p.base_id === parsed.baseId);
+      let product = products.find(p => p.full_barcode === trimmed);
       if (!product) {
-        product = await fetchProductByScanCode(trimmed, parsed.baseId);
+        product = await fetchProductByScanCode(trimmed);
       }
 
       if (product) {
@@ -270,17 +271,34 @@ export default function POS() {
 
         addToCart(product, null, null);
       } else {
-        toast({ title: "Produs negăsit", description: `Base ID: ${parsed.baseId}`, variant: "destructive" });
+        toast({ title: "Produs negăsit", description: `Cod 17 cifre: ${trimmed}`, variant: "destructive" });
       }
     }
 
     setScanInput("");
   }, [mode, products, cart, addToCart, recordActivity, toast, fetchFreshStoreStock, fetchProductByScanCode, isStoreLocationLoading, isStoreStockLoading, storeLocation?.id]);
 
+  useEffect(() => {
+    if (mode !== "casier") return;
+    const candidate = scanInput.trim();
+    if (!/^\d{17}$/.test(candidate)) return;
+    if (scanProcessingRef.current) return;
+
+    scanProcessingRef.current = true;
+    void handleScan(candidate).finally(() => {
+      scanProcessingRef.current = false;
+    });
+  }, [mode, scanInput, handleScan]);
+
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleScan(scanInput);
-    }
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (scanProcessingRef.current) return;
+
+    scanProcessingRef.current = true;
+    void handleScan(scanInput).finally(() => {
+      scanProcessingRef.current = false;
+    });
   };
 
   // Handle PIN login submission
