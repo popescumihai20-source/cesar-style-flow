@@ -234,11 +234,17 @@ export default function Produse() {
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
               {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
             </Badge>
+            <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
+              {products.reduce((s, p) => s + (p.active ? p.stock_general * p.selling_price : 0), 0).toLocaleString("ro-RO")} lei
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5">
             <Warehouse className="h-3.5 w-3.5" />Depozit
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
               {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) : 0), 0)} buc
+            </Badge>
+            <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
+              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) * p.selling_price : 0), 0).toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
         </TabsList>
