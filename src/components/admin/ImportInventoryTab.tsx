@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileDown, CheckCircle, AlertTriangle, Warehouse, Store } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface ImportResult {
   location: string;
@@ -19,6 +20,20 @@ interface ImportResult {
   uniqueProducts: number;
 }
 
+async function fileToCSV(file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext === "xlsx" || ext === "xls") {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    // Convert to CSV with tab delimiter to avoid issues with commas in descriptions
+    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t" });
+  }
+  // For CSV/TXT, read as text
+  const rawText = await file.text();
+  return rawText.split(/\r?\n/).map(line => line.replace(/,+$/, "")).join("\n");
+}
+
 export default function ImportInventoryTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -30,10 +45,8 @@ export default function ImportInventoryTab() {
   const handleFileUpload = useCallback(async (file: File, locationKey: "depozit" | "magazin") => {
     setIsImporting(true);
     try {
-      const rawText = await file.text();
-      // Strip trailing empty columns to reduce payload size
-      const csvText = rawText.split(/\r?\n/).map(line => line.replace(/,+$/, '')).join('\n');
-      
+      const csvText = await fileToCSV(file);
+
       const { data, error } = await supabase.functions.invoke("bulk-import-inventory", {
         body: { csvText, location: locationKey },
       });
@@ -101,12 +114,13 @@ export default function ImportInventoryTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            Import Inventar din Fișiere CSV/Text
+            Import Inventar din Fișiere CSV/Excel
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Importă stocul inițial din două fișiere separate pe locație. Format: <code className="text-xs bg-muted px-1 rounded">Descriere, Cantitate, Cod (17 cifre)</code>. Procesarea se face server-side în batch-uri de 500.
+            Importă stocul din fișiere <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong> sau <strong>.txt</strong>. 
+            Format: 3 coloane — <code className="text-xs bg-muted px-1 rounded">Descriere | Cantitate | Cod (17 cifre)</code>.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="border-dashed">
@@ -117,7 +131,7 @@ export default function ImportInventoryTab() {
                   <Upload className="h-3 w-3 mr-1" />
                   {isImporting ? "Se importă..." : "Selectează fișier"}
                 </Button>
-                <input ref={fileRefDepozit} type="file" accept=".txt,.csv" className="hidden" onChange={handleDepozitFile} />
+                <input ref={fileRefDepozit} type="file" accept=".txt,.csv,.xlsx,.xls" className="hidden" onChange={handleDepozitFile} />
               </CardContent>
             </Card>
             <Card className="border-dashed">
@@ -128,7 +142,7 @@ export default function ImportInventoryTab() {
                   <Upload className="h-3 w-3 mr-1" />
                   {isImporting ? "Se importă..." : "Selectează fișier"}
                 </Button>
-                <input ref={fileRefMagazin} type="file" accept=".txt,.csv" className="hidden" onChange={handleMagazinFile} />
+                <input ref={fileRefMagazin} type="file" accept=".txt,.csv,.xlsx,.xls" className="hidden" onChange={handleMagazinFile} />
               </CardContent>
             </Card>
           </div>
