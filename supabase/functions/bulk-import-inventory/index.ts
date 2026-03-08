@@ -150,6 +150,17 @@ Deno.serve(async (req) => {
     const locationLabel = locationKey === "depozit" ? "Depozit Central" : "Magazin Ferdinand";
     const stockField = locationKey === "depozit" ? "stock_depozit" : "stock_general";
 
+    // Resolve inventory_locations ID for this location
+    const locationType = locationKey === "depozit" ? "warehouse" : "store";
+    const { data: locData } = await supabase
+      .from("inventory_locations")
+      .select("id")
+      .eq("type", locationType)
+      .eq("active", true)
+      .limit(1)
+      .single();
+    const inventoryLocationId = locData?.id ?? null;
+
     const csvText = typeof body.csvText === "string" ? (body.csvText as string) : "";
 
     if (!csvText.trim()) {
@@ -222,7 +233,16 @@ Deno.serve(async (req) => {
           .from("products")
           .update(updateData)
           .eq("id", existingProduct.id);
-        if (!error) updated++;
+        if (!error) {
+          updated++;
+          // Sync inventory_stock
+          if (inventoryLocationId) {
+            await supabase.from("inventory_stock").upsert(
+              { product_id: existingProduct.id, location_id: inventoryLocationId, quantity: item.totalQty },
+              { onConflict: "product_id,location_id" }
+            );
+          }
+        }
         else console.error(`Update error for ${baseId}:`, error.message);
       } else {
         // Insert new product with ONLY the target location's stock set
@@ -236,9 +256,18 @@ Deno.serve(async (req) => {
           full_barcode: item.fullBarcode,
           active: true,
         };
-        const { error } = await supabase.from("products").insert(newProduct);
-        if (!error) created++;
-        else console.error(`Insert error for ${baseId}:`, error.message);
+        const { data: inserted, error } = await supabase.from("products").insert(newProduct).select("id").single();
+        if (!error && inserted) {
+          created++;
+          // Sync inventory_stock
+          if (inventoryLocationId) {
+            await supabase.from("inventory_stock").upsert(
+              { product_id: inserted.id, location_id: inventoryLocationId, quantity: item.totalQty },
+              { onConflict: "product_id,location_id" }
+            );
+          }
+        }
+        else console.error(`Insert error for ${baseId}:`, error?.message);
       }
     }
 
