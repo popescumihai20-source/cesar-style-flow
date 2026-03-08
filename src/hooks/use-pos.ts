@@ -167,6 +167,7 @@ export function usePOS() {
     updateDiscount,
     toggleGift,
     updateQuantity,
+    clearCart,
     resetToPublic,
     recordActivity,
   };
