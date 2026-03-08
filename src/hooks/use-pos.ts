@@ -15,15 +15,19 @@ export function usePOS() {
   const lastActivityRef = useRef<number>(Date.now());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const resetToPublic = useCallback(() => {
-    setMode("public");
+  const clearCart = useCallback(() => {
     setCart([]);
-    setCashierEmployeeId(null);
-    setCashierName("");
     setPaymentMethod("numerar");
     setCashAmount(0);
     setCardAmount(0);
   }, []);
+
+  const resetToPublic = useCallback(() => {
+    setMode("public");
+    clearCart();
+    setCashierEmployeeId(null);
+    setCashierName("");
+  }, [clearCart]);
 
   const recordActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
