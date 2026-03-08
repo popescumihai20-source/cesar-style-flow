@@ -759,7 +759,7 @@ export default function POS() {
               <Button className="w-full h-14 text-lg font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
                 {isMagazinLocked ? <><ShieldAlert className="h-5 w-5 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-5 w-5 mr-2" />Finalizare în Sistem</>}
               </Button>
-              <Button variant="destructive" className="w-full" onClick={resetToPublic}>
+              <Button variant="destructive" className="w-full" onClick={() => { setCart([]); setPaymentMethod("numerar"); setCashAmount(0); setCardAmount(0); recordActivity(); }}>
                 <X className="h-4 w-4 mr-2" />Anulare Vânzare
               </Button>
             </>
