@@ -150,6 +150,17 @@ Deno.serve(async (req) => {
     const locationLabel = locationKey === "depozit" ? "Depozit Central" : "Magazin Ferdinand";
     const stockField = locationKey === "depozit" ? "stock_depozit" : "stock_general";
 
+    // Resolve inventory_locations ID for this location
+    const locationType = locationKey === "depozit" ? "warehouse" : "store";
+    const { data: locData } = await supabase
+      .from("inventory_locations")
+      .select("id")
+      .eq("type", locationType)
+      .eq("active", true)
+      .limit(1)
+      .single();
+    const inventoryLocationId = locData?.id ?? null;
+
     const csvText = typeof body.csvText === "string" ? (body.csvText as string) : "";
 
     if (!csvText.trim()) {
