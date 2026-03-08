@@ -233,7 +233,16 @@ Deno.serve(async (req) => {
           .from("products")
           .update(updateData)
           .eq("id", existingProduct.id);
-        if (!error) updated++;
+        if (!error) {
+          updated++;
+          // Sync inventory_stock
+          if (inventoryLocationId) {
+            await supabase.from("inventory_stock").upsert(
+              { product_id: existingProduct.id, location_id: inventoryLocationId, quantity: item.totalQty },
+              { onConflict: "product_id,location_id" }
+            );
+          }
+        }
         else console.error(`Update error for ${baseId}:`, error.message);
       } else {
         // Insert new product with ONLY the target location's stock set
@@ -247,9 +256,18 @@ Deno.serve(async (req) => {
           full_barcode: item.fullBarcode,
           active: true,
         };
-        const { error } = await supabase.from("products").insert(newProduct);
-        if (!error) created++;
-        else console.error(`Insert error for ${baseId}:`, error.message);
+        const { data: inserted, error } = await supabase.from("products").insert(newProduct).select("id").single();
+        if (!error && inserted) {
+          created++;
+          // Sync inventory_stock
+          if (inventoryLocationId) {
+            await supabase.from("inventory_stock").upsert(
+              { product_id: inserted.id, location_id: inventoryLocationId, quantity: item.totalQty },
+              { onConflict: "product_id,location_id" }
+            );
+          }
+        }
+        else console.error(`Insert error for ${baseId}:`, error?.message);
       }
     }
 
