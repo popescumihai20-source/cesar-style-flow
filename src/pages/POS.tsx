@@ -137,7 +137,8 @@ export default function POS() {
   }, [storeLocation?.id, getStoreStock]);
 
   const fetchProductByScanCode = useCallback(async (scannedCode: string) => {
-    const { data, error } = await supabase
+    // First try exact full_barcode match
+    const { data: exactMatch, error: err1 } = await supabase
       .from("products")
       .select("*")
       .eq("active", true)
@@ -145,12 +146,23 @@ export default function POS() {
       .limit(1)
       .maybeSingle();
 
-    if (error) {
-      console.error("[POS] Product lookup error:", error);
-      return null;
+    if (exactMatch) return exactMatch as Product;
+
+    // Fallback: match by base_id (first 7 digits)
+    const baseId = scannedCode.substring(0, 7);
+    const { data: baseMatch, error: err2 } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .eq("base_id", baseId)
+      .limit(1)
+      .maybeSingle();
+
+    if (err1 && err2) {
+      console.error("[POS] Product lookup error:", err1, err2);
     }
 
-    return (data as Product | null) ?? null;
+    return (baseMatch as Product | null) ?? null;
   }, []);
 
   // Filter products for search
