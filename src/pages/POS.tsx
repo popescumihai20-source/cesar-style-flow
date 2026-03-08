@@ -31,7 +31,7 @@ export default function POS() {
     cartTotal, cartDiscountTotal, cartItemCount,
     activateCashier, addToCart, removeFromCart,
     updateDiscount, toggleGift, updateQuantity,
-    resetToPublic, recordActivity,
+    clearCart, resetToPublic, recordActivity,
   } = usePOS();
 
   const [scanInput, setScanInput] = useState("");
