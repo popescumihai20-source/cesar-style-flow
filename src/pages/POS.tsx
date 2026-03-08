@@ -252,7 +252,8 @@ export default function POS() {
 
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
-      let product = products.find(p => p.full_barcode === trimmed);
+      const baseId = trimmed.substring(0, 7);
+      let product = products.find(p => p.full_barcode === trimmed) || products.find(p => p.base_id === baseId);
       if (!product) {
         product = await fetchProductByScanCode(trimmed);
       }
