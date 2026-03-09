@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Lock, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
+import POSNumpad from "@/components/pos/POSNumpad";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
