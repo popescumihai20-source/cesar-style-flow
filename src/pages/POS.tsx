@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, ShoppingCart, X, Gift, Minus, Plus, Trash2, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Receipt, Lock, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CashierDashboard from "@/components/pos/CashierDashboard";
+import POSNumpad from "@/components/pos/POSNumpad";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
@@ -751,6 +752,38 @@ export default function POS() {
             </CardContent>
           </Card>
         )}
+
+        {/* Numpad */}
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground mb-2 text-center">Numpad</p>
+            <POSNumpad
+              onDigit={(d) => {
+                recordActivity();
+                setScanInput(prev => prev + d);
+                scanInputRef.current?.focus();
+              }}
+              onBackspace={() => {
+                recordActivity();
+                setScanInput(prev => prev.slice(0, -1));
+                scanInputRef.current?.focus();
+              }}
+              onClear={() => {
+                recordActivity();
+                setScanInput("");
+                scanInputRef.current?.focus();
+              }}
+              onEnter={() => {
+                recordActivity();
+                if (scanProcessingRef.current) return;
+                scanProcessingRef.current = true;
+                void handleScan(scanInput).finally(() => {
+                  scanProcessingRef.current = false;
+                });
+              }}
+            />
+          </CardContent>
+        </Card>
 
         {/* Action buttons */}
         <div className="mt-auto space-y-2">
