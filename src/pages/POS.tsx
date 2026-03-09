@@ -753,6 +753,38 @@ export default function POS() {
           </Card>
         )}
 
+        {/* Numpad */}
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground mb-2 text-center">Numpad</p>
+            <POSNumpad
+              onDigit={(d) => {
+                recordActivity();
+                setScanInput(prev => prev + d);
+                scanInputRef.current?.focus();
+              }}
+              onBackspace={() => {
+                recordActivity();
+                setScanInput(prev => prev.slice(0, -1));
+                scanInputRef.current?.focus();
+              }}
+              onClear={() => {
+                recordActivity();
+                setScanInput("");
+                scanInputRef.current?.focus();
+              }}
+              onEnter={() => {
+                recordActivity();
+                if (scanProcessingRef.current) return;
+                scanProcessingRef.current = true;
+                void handleScan(scanInput).finally(() => {
+                  scanProcessingRef.current = false;
+                });
+              }}
+            />
+          </CardContent>
+        </Card>
+
         {/* Action buttons */}
         <div className="mt-auto space-y-2">
           {mode === "casier" && cart.length > 0 && (
