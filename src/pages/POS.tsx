@@ -840,7 +840,18 @@ export default function POS() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Căutare produs</DialogTitle></DialogHeader>
           <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Caută după nume sau cod..." autoFocus />
-          <div className="max-h-80 overflow-auto space-y-1">
+          <POSNumpad
+            compact
+            onDigit={(d) => setSearchQuery(prev => prev + d)}
+            onBackspace={() => setSearchQuery(prev => prev.slice(0, -1))}
+            onClear={() => setSearchQuery("")}
+            onEnter={() => {
+              if (filteredProducts.length === 1) {
+                handleAddFromSearch(filteredProducts[0]);
+              }
+            }}
+          />
+          <div className="max-h-60 overflow-auto space-y-1">
             {filteredProducts.map((product) => {
               const storeQty = getStoreStock(product.id);
               return (
