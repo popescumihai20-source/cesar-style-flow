@@ -177,10 +177,18 @@ export default function POS() {
 
   // Filter products for search
   const filteredProducts = searchQuery.length >= 2
-    ? products.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.base_id.includes(searchQuery)
-      )
+    ? products.filter(p => {
+        const q = searchQuery.toLowerCase();
+        // Match by name
+        if (p.name.toLowerCase().includes(q)) return true;
+        // Match by base_id
+        if (p.base_id.includes(searchQuery)) return true;
+        // Match by full_barcode
+        if (p.full_barcode && p.full_barcode.includes(searchQuery)) return true;
+        // If query is 7+ digits, try matching first 7 as base_id
+        if (/^\d{7,}$/.test(searchQuery) && p.base_id === searchQuery.substring(0, 7)) return true;
+        return false;
+      })
     : [];
 
   // Auto-focus scan input only on initial mount
