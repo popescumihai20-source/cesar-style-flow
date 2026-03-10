@@ -601,7 +601,7 @@ export default function POS() {
             onChange={(e) => setScanInput(e.target.value)}
             onKeyDown={handleScanKeyDown}
             placeholder={mode === "public" ? "Scanează cardul de angajat..." : "Scanează produs..."}
-            className="h-14 text-lg font-mono bg-primary text-primary-foreground border-2 border-primary/30 focus:border-accent placeholder:text-primary-foreground/50"
+            className="h-16 text-2xl font-mono bg-primary text-primary-foreground border-2 border-primary/30 focus:border-accent placeholder:text-primary-foreground/50"
             autoFocus
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -700,7 +700,7 @@ export default function POS() {
       </div>
 
       {/* Right: Cart summary & actions */}
-      <div className="w-80 flex flex-col gap-4">
+      <div className="w-96 flex flex-col gap-4 overflow-auto">
         <Card className="border-primary/30">
           <CardContent className="p-4 space-y-3">
             <div className="flex justify-between text-sm">
@@ -840,7 +840,18 @@ export default function POS() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Căutare produs</DialogTitle></DialogHeader>
           <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Caută după nume sau cod..." autoFocus />
-          <div className="max-h-80 overflow-auto space-y-1">
+          <POSNumpad
+            compact
+            onDigit={(d) => setSearchQuery(prev => prev + d)}
+            onBackspace={() => setSearchQuery(prev => prev.slice(0, -1))}
+            onClear={() => setSearchQuery("")}
+            onEnter={() => {
+              if (filteredProducts.length === 1) {
+                handleAddFromSearch(filteredProducts[0]);
+              }
+            }}
+          />
+          <div className="max-h-60 overflow-auto space-y-1">
             {filteredProducts.map((product) => {
               const storeQty = getStoreStock(product.id);
               return (

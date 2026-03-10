@@ -1,14 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Delete, CornerDownLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface POSNumpadProps {
   onDigit: (digit: string) => void;
   onBackspace: () => void;
   onClear: () => void;
   onEnter?: () => void;
+  compact?: boolean;
 }
 
-export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: POSNumpadProps) {
+export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, compact = false }: POSNumpadProps) {
   const keys = [
     ["7", "8", "9"],
     ["4", "5", "6"],
@@ -16,8 +18,10 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: PO
     [".", "0", "⌫"],
   ];
 
+  const btnSize = compact ? "h-11 text-base" : "h-14 text-xl";
+
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div className={cn("grid grid-cols-3", compact ? "gap-1" : "gap-2")}>
       {keys.map((row) =>
         row.map((key) => {
           if (key === "⌫") {
@@ -25,11 +29,11 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: PO
               <Button
                 key={key}
                 variant="outline"
-                className="h-12 text-lg font-mono"
+                className={cn(btnSize, "font-mono")}
                 onClick={onBackspace}
                 type="button"
               >
-                <Delete className="h-5 w-5" />
+                <Delete className={compact ? "h-4 w-4" : "h-6 w-6"} />
               </Button>
             );
           }
@@ -37,7 +41,7 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: PO
             <Button
               key={key}
               variant="outline"
-              className="h-12 text-lg font-mono"
+              className={cn(btnSize, "font-mono")}
               onClick={() => onDigit(key)}
               type="button"
             >
@@ -48,7 +52,7 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: PO
       )}
       <Button
         variant="destructive"
-        className="h-12 text-xs font-medium col-span-1"
+        className={cn(btnSize, "font-medium col-span-1")}
         onClick={onClear}
         type="button"
       >
@@ -56,11 +60,11 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter }: PO
       </Button>
       <Button
         variant="default"
-        className="h-12 text-sm font-bold col-span-2"
+        className={cn(btnSize, "font-bold col-span-2")}
         onClick={onEnter}
         type="button"
       >
-        <CornerDownLeft className="h-4 w-4 mr-1" />
+        <CornerDownLeft className={compact ? "h-4 w-4 mr-1" : "h-5 w-5 mr-2"} />
         ENTER
       </Button>
     </div>
