@@ -748,9 +748,14 @@ export default function POS() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {mode === "casier" && (
+            {mode === "casier" && !returnMode && (
               <Badge variant="outline" className="border-primary text-primary">
                 CASIER ACTIV
+              </Badge>
+            )}
+            {mode === "casier" && returnMode && (
+              <Badge variant="destructive">
+                <RotateCcw className="h-3 w-3 mr-1" />MOD RETUR
               </Badge>
             )}
             <Button
