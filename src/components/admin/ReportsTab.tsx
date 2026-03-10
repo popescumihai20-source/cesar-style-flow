@@ -19,6 +19,7 @@ export default function ReportsTab() {
         .from("sales")
         .select("*")
         .gte("created_at", thirtyDaysAgo.toISOString())
+        .not("status", "in", '("anulat","returned")')
         .order("created_at");
       if (error) throw error;
       return data;
