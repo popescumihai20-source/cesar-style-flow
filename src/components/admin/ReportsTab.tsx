@@ -51,10 +51,13 @@ export default function ReportsTab() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const { data, error } = await supabase
         .from("commission_logs")
-        .select("*, employees(name)")
+        .select("*, employees(name), sales!commission_logs_sale_id_fkey(status)")
         .gte("created_at", thirtyDaysAgo.toISOString());
       if (error) throw error;
-      return data as any[];
+      return (data || []).filter((c: any) => {
+        const status = c.sales?.status;
+        return status !== 'returned' && status !== 'anulat';
+      });
     },
   });
 
