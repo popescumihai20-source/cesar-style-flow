@@ -233,6 +233,12 @@ export default function POS() {
       return;
     }
 
+    // CASIER mode — handle return mode separately
+    if (returnMode) {
+      await handleReturnScan(trimmed);
+      return;
+    }
+
     // CASIER mode — add product to cart
     if (isStoreLocationLoading || isStoreStockLoading) {
       toast({
