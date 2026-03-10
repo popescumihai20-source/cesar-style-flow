@@ -601,7 +601,7 @@ export default function POS() {
             onChange={(e) => setScanInput(e.target.value)}
             onKeyDown={handleScanKeyDown}
             placeholder={mode === "public" ? "Scanează cardul de angajat..." : "Scanează produs..."}
-            className="h-14 text-lg font-mono bg-primary text-primary-foreground border-2 border-primary/30 focus:border-accent placeholder:text-primary-foreground/50"
+            className="h-16 text-2xl font-mono bg-primary text-primary-foreground border-2 border-primary/30 focus:border-accent placeholder:text-primary-foreground/50"
             autoFocus
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
