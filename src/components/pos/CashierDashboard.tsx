@@ -33,17 +33,21 @@ export default function CashierDashboard({ employeeId, cashierName }: CashierDas
     staleTime: 30 * 1000,
   });
 
-  // Commissions for this cashier
+  // Commissions for this cashier (exclude returned sales)
   const { data: commissions = [] } = useQuery({
     queryKey: ["cashier-commissions", employeeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("commission_logs")
-        .select("*")
+        .select("*, sales!commission_logs_sale_id_fkey(status)")
         .eq("employee_id", employeeId)
         .gte("created_at", monthStart);
       if (error) throw error;
-      return data;
+      // Filter out commissions from returned/cancelled sales
+      return (data || []).filter((c: any) => {
+        const status = c.sales?.status;
+        return status !== 'returned' && status !== 'anulat';
+      });
     },
     staleTime: 30 * 1000,
   });

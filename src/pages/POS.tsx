@@ -62,6 +62,15 @@ export default function POS() {
   const [pendingEmployee, setPendingEmployee] = useState<any>(null);
   const [showPinLogin, setShowPinLogin] = useState(false);
   const [pinInput, setPinInput] = useState("");
+  // Return mode state
+  const [returnMode, setReturnMode] = useState(false);
+  const [showReturnResult, setShowReturnResult] = useState(false);
+  const [returnResult, setReturnResult] = useState<{
+    success: boolean;
+    message: string;
+    productName?: string;
+    saleInternalId?: string;
+  } | null>(null);
   const [pinError, setPinError] = useState("");
 
   // Fetch products for search
