@@ -16,7 +16,7 @@ export default function CashierDashboard({ employeeId, cashierName }: CashierDas
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // Sales by this cashier
+  // Sales by this cashier (exclude returned/anulat)
   const { data: sales = [] } = useQuery({
     queryKey: ["cashier-sales", employeeId],
     queryFn: async () => {
@@ -25,6 +25,7 @@ export default function CashierDashboard({ employeeId, cashierName }: CashierDas
         .select("*")
         .eq("cashier_employee_id", employeeId)
         .gte("created_at", monthStart)
+        .not("status", "in", '("anulat","returned")')
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
