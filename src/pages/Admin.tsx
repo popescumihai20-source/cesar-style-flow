@@ -283,8 +283,8 @@ export default function Admin() {
                       <TableCell className="font-mono text-sm">{s.internal_id}</TableCell>
                       <TableCell className="text-right font-mono">{s.total.toFixed(2)} RON</TableCell>
                       <TableCell>
-                        <Badge variant={s.status === "fiscalizat" ? "default" : s.status === "anulat" ? "destructive" : "secondary"} className="text-xs">
-                          {s.status}
+                        <Badge variant={s.status === "fiscalizat" ? "default" : s.status === "anulat" ? "destructive" : s.status === "returned" ? "destructive" : "secondary"} className="text-xs">
+                          {s.status === "returned" ? "Anulată prin retur" : s.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="capitalize">{s.payment_method}</TableCell>
@@ -380,7 +380,7 @@ export default function Admin() {
                 <div><span className="text-muted-foreground">Total:</span> <span className="font-mono font-bold">{selectedSale.total.toFixed(2)} RON</span></div>
                 <div><span className="text-muted-foreground">Reduceri:</span> <span className="font-mono">{selectedSale.discount_total.toFixed(2)} RON</span></div>
                 <div><span className="text-muted-foreground">Plată:</span> <span className="capitalize">{selectedSale.payment_method}</span></div>
-                <div><span className="text-muted-foreground">Status:</span> <Badge variant={selectedSale.status === "fiscalizat" ? "default" : "secondary"} className="text-xs ml-1">{selectedSale.status}</Badge></div>
+                <div><span className="text-muted-foreground">Status:</span> <Badge variant={selectedSale.status === "fiscalizat" ? "default" : selectedSale.status === "returned" ? "destructive" : "secondary"} className="text-xs ml-1">{selectedSale.status === "returned" ? "Anulată prin retur" : selectedSale.status}</Badge></div>
                 <div><span className="text-muted-foreground">Casier:</span> {(selectedSale as any).employees?.name || "—"}</div>
                 <div><span className="text-muted-foreground">Data:</span> {new Date(selectedSale.created_at).toLocaleString("ro-RO")}</div>
                 {selectedSale.cash_amount != null && <div><span className="text-muted-foreground">Numerar:</span> <span className="font-mono">{selectedSale.cash_amount.toFixed(2)}</span></div>}
@@ -445,7 +445,7 @@ export default function Admin() {
               )}
 
               {/* Cancel sale button */}
-              {selectedSale.status !== "anulat" && (
+              {selectedSale.status !== "anulat" && selectedSale.status !== "returned" && (
                 <div className="border-t border-border pt-3">
                   <Button
                     variant="destructive"

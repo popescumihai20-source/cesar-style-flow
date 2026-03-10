@@ -1364,7 +1364,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "casier" | "depozit"
       payment_method: "numerar" | "card" | "mixt"
-      sale_status: "pending_fiscal" | "fiscalizat" | "anulat"
+      sale_status: "pending_fiscal" | "fiscalizat" | "anulat" | "returned"
       seasonal_tag: "permanent" | "iarna" | "vara" | "tranzitie"
     }
     CompositeTypes: {
@@ -1495,7 +1495,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "casier", "depozit"],
       payment_method: ["numerar", "card", "mixt"],
-      sale_status: ["pending_fiscal", "fiscalizat", "anulat"],
+      sale_status: ["pending_fiscal", "fiscalizat", "anulat", "returned"],
       seasonal_tag: ["permanent", "iarna", "vara", "tranzitie"],
     },
   },

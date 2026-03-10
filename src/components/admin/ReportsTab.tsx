@@ -19,6 +19,7 @@ export default function ReportsTab() {
         .from("sales")
         .select("*")
         .gte("created_at", thirtyDaysAgo.toISOString())
+        .not("status", "in", '("anulat","returned")')
         .order("created_at");
       if (error) throw error;
       return data;
@@ -30,12 +31,16 @@ export default function ReportsTab() {
     queryFn: async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Fetch sale_items, then filter out items from returned/cancelled sales
       const { data, error } = await supabase
         .from("sale_items")
-        .select("*, products(name, category)")
+        .select("*, products(name, category), sales!sale_items_sale_id_fkey(status)")
         .gte("created_at", thirtyDaysAgo.toISOString());
       if (error) throw error;
-      return data as any[];
+      return (data || []).filter((si: any) => {
+        const status = si.sales?.status;
+        return status !== 'returned' && status !== 'anulat';
+      });
     },
   });
 
@@ -46,10 +51,13 @@ export default function ReportsTab() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const { data, error } = await supabase
         .from("commission_logs")
-        .select("*, employees(name)")
+        .select("*, employees(name), sales!commission_logs_sale_id_fkey(status)")
         .gte("created_at", thirtyDaysAgo.toISOString());
       if (error) throw error;
-      return data as any[];
+      return (data || []).filter((c: any) => {
+        const status = c.sales?.status;
+        return status !== 'returned' && status !== 'anulat';
+      });
     },
   });
 
