@@ -568,6 +568,162 @@ export default function POS() {
     resetToPublic();
   };
 
+  // ========== RETURN MODE ==========
+  const handleReturnScan = useCallback(async (barcode: string) => {
+    const trimmed = barcode.trim();
+    if (!trimmed || !cashierEmployeeId) return;
+
+    if (!isValidBarcode(trimmed)) {
+      setReturnResult({ success: false, message: "Codul trebuie să aibă exact 17 cifre numerice." });
+      setShowReturnResult(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Find the product by barcode
+      const product = await fetchProductByScanCode(trimmed);
+      if (!product) {
+        setReturnResult({ success: false, message: `Produsul cu codul ${trimmed} nu a fost găsit.` });
+        setShowReturnResult(true);
+        return;
+      }
+
+      // Find original sale containing this product (most recent, non-returned, non-cancelled)
+      const { data: saleItemRows, error: siErr } = await supabase
+        .from("sale_items")
+        .select("*, sales!sale_items_sale_id_fkey(id, internal_id, status, cashier_employee_id)")
+        .eq("product_id", product.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (siErr) throw siErr;
+
+      // Filter to find a valid (non-returned, non-cancelled) sale
+      const validItem = (saleItemRows || []).find((si: any) => {
+        const status = si.sales?.status;
+        return status && status !== 'returned' && status !== 'anulat';
+      });
+
+      if (!validItem) {
+        setReturnResult({ success: false, message: `Nu s-a găsit o vânzare activă pentru ${product.name}.` });
+        setShowReturnResult(true);
+        return;
+      }
+
+      const sale = (validItem as any).sales;
+
+      // Check if already returned (check returns table)
+      const { data: existingReturn } = await supabase
+        .from("returns" as any)
+        .select("id")
+        .eq("sale_id", sale.id)
+        .eq("product_id", product.id)
+        .maybeSingle();
+
+      if (existingReturn) {
+        setReturnResult({ success: false, message: `Vânzarea ${sale.internal_id} pentru ${product.name} a fost deja returnată.` });
+        setShowReturnResult(true);
+        return;
+      }
+
+      // Process the return:
+      // 1. Mark sale as returned
+      await supabase
+        .from("sales")
+        .update({ status: "returned" as any })
+        .eq("id", sale.id);
+
+      // 2. Create return record
+      await supabase
+        .from("returns" as any)
+        .insert({
+          sale_id: sale.id,
+          sale_item_id: validItem.id,
+          product_id: product.id,
+          variant_code: validItem.variant_code,
+          quantity: validItem.quantity,
+          barcode: trimmed,
+          employee_id: cashierEmployeeId,
+          location_id: storeLocation?.id || null,
+        });
+
+      // 3. Restore stock (products.stock_general + inventory_stock)
+      const { data: currentProduct } = await supabase
+        .from("products")
+        .select("stock_general")
+        .eq("id", product.id)
+        .single();
+
+      if (currentProduct) {
+        await supabase
+          .from("products")
+          .update({ stock_general: currentProduct.stock_general + validItem.quantity })
+          .eq("id", product.id);
+      }
+
+      if (storeLocation?.id) {
+        const { data: stockEntry } = await supabase
+          .from("inventory_stock" as any)
+          .select("quantity")
+          .eq("product_id", product.id)
+          .eq("location_id", storeLocation.id)
+          .maybeSingle();
+
+        if (stockEntry) {
+          await supabase
+            .from("inventory_stock" as any)
+            .update({ quantity: (stockEntry as any).quantity + validItem.quantity, updated_at: new Date().toISOString() })
+            .eq("product_id", product.id)
+            .eq("location_id", storeLocation.id);
+        } else {
+          await supabase
+            .from("inventory_stock" as any)
+            .insert({ product_id: product.id, location_id: storeLocation.id, quantity: validItem.quantity });
+        }
+      }
+
+      // 4. Restore variant stock if applicable
+      if (validItem.variant_code) {
+        const { data: variant } = await supabase
+          .from("product_variants")
+          .select("id, stock_variant")
+          .eq("product_id", product.id)
+          .eq("variant_code", validItem.variant_code)
+          .maybeSingle();
+
+        if (variant) {
+          await supabase
+            .from("product_variants")
+            .update({ stock_variant: variant.stock_variant + validItem.quantity })
+            .eq("id", variant.id);
+        }
+      }
+
+      // Invalidate caches
+      queryClient.invalidateQueries({ queryKey: ["store-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["products-pos"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["cashier-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["cashier-commissions"] });
+
+      setReturnResult({
+        success: true,
+        message: `Retur procesat cu succes!`,
+        productName: product.name,
+        saleInternalId: sale.internal_id,
+      });
+      setShowReturnResult(true);
+    } catch (err: any) {
+      setReturnResult({ success: false, message: err.message });
+      setShowReturnResult(true);
+    } finally {
+      setIsSubmitting(false);
+      setScanInput("");
+    }
+  }, [cashierEmployeeId, fetchProductByScanCode, storeLocation?.id, queryClient]);
+
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-4" onClick={recordActivity}>
       {/* Left: Products / Scanner */}
