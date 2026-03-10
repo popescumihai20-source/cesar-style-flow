@@ -700,7 +700,7 @@ export default function POS() {
       </div>
 
       {/* Right: Cart summary & actions */}
-      <div className="w-80 flex flex-col gap-4">
+      <div className="w-96 flex flex-col gap-4 overflow-auto">
         <Card className="border-primary/30">
           <CardContent className="p-4 space-y-3">
             <div className="flex justify-between text-sm">
