@@ -771,7 +771,7 @@ export default function POS() {
             value={scanInput}
             onChange={(e) => setScanInput(e.target.value)}
             onKeyDown={handleScanKeyDown}
-            placeholder={mode === "public" ? "Scanează cardul de angajat..." : "Scanează produs..."}
+            placeholder={mode === "public" ? "Scanează cardul de angajat..." : returnMode ? "Scanează codul produsului returnat..." : "Scanează produs..."}
             className="h-16 text-2xl font-mono bg-primary text-primary-foreground border-2 border-primary/30 focus:border-accent placeholder:text-primary-foreground/50"
             autoFocus
           />
