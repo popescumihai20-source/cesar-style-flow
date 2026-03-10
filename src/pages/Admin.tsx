@@ -283,8 +283,8 @@ export default function Admin() {
                       <TableCell className="font-mono text-sm">{s.internal_id}</TableCell>
                       <TableCell className="text-right font-mono">{s.total.toFixed(2)} RON</TableCell>
                       <TableCell>
-                        <Badge variant={s.status === "fiscalizat" ? "default" : s.status === "anulat" ? "destructive" : "secondary"} className="text-xs">
-                          {s.status}
+                        <Badge variant={s.status === "fiscalizat" ? "default" : s.status === "anulat" ? "destructive" : s.status === "returned" ? "destructive" : "secondary"} className="text-xs">
+                          {s.status === "returned" ? "Anulată prin retur" : s.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="capitalize">{s.payment_method}</TableCell>
