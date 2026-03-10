@@ -387,6 +387,20 @@ export default function POS() {
     if (!cashierEmployeeId || cart.length === 0) return;
     setIsSubmitting(true);
     try {
+      // DEBUG: Log auth state for RLS diagnosis
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      console.log("[POS-FINALIZE] auth.uid():", authUser?.id);
+      console.log("[POS-FINALIZE] cashierEmployeeId:", cashierEmployeeId);
+      
+      // Check user roles
+      if (authUser) {
+        const { data: userRoles, error: rolesErr } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authUser.id);
+        console.log("[POS-FINALIZE] user_roles:", userRoles, "error:", rolesErr);
+      }
+
       // FINAL STOCK CHECK — re-fetch current store stock to prevent overselling
       if (storeLocation?.id) {
         for (const item of cart) {
@@ -416,23 +430,29 @@ export default function POS() {
       const finalCashAmount = paymentMethod === "numerar" ? cartTotal : paymentMethod === "mixt" ? cashAmount : null;
       const finalCardAmount = paymentMethod === "card" ? cartTotal : paymentMethod === "mixt" ? cardAmount : null;
 
+      const insertPayload = {
+        internal_id: internalId,
+        cashier_employee_id: cashierEmployeeId,
+        status: "pending_fiscal" as const,
+        total: cartTotal,
+        discount_total: cartDiscountTotal,
+        payment_method: paymentMethod,
+        cash_amount: finalCashAmount,
+        card_amount: finalCardAmount,
+      };
+      console.log("[POS-FINALIZE] INSERT payload:", JSON.stringify(insertPayload));
+
       // Create sale
       const { data: sale, error: saleError } = await supabase
         .from("sales")
-        .insert({
-          internal_id: internalId,
-          cashier_employee_id: cashierEmployeeId,
-          status: "pending_fiscal" as const,
-          total: cartTotal,
-          discount_total: cartDiscountTotal,
-          payment_method: paymentMethod,
-          cash_amount: finalCashAmount,
-          card_amount: finalCardAmount,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
-      if (saleError) throw saleError;
+      if (saleError) {
+        console.error("[POS-FINALIZE] sale insert error:", saleError);
+        throw saleError;
+      }
 
       // Create sale items
       const items = cart.map(item => ({
