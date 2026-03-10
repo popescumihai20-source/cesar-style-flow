@@ -31,12 +31,16 @@ export default function ReportsTab() {
     queryFn: async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Fetch sale_items, then filter out items from returned/cancelled sales
       const { data, error } = await supabase
         .from("sale_items")
-        .select("*, products(name, category)")
+        .select("*, products(name, category), sales!sale_items_sale_id_fkey(status)")
         .gte("created_at", thirtyDaysAgo.toISOString());
       if (error) throw error;
-      return data as any[];
+      return (data || []).filter((si: any) => {
+        const status = si.sales?.status;
+        return status !== 'returned' && status !== 'anulat';
+      });
     },
   });
 
