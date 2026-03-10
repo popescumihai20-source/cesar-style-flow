@@ -1130,6 +1130,35 @@ export default function POS() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Return result dialog */}
+      <Dialog open={showReturnResult} onOpenChange={(open) => { if (!open) { setShowReturnResult(false); setReturnResult(null); } }}>
+        <DialogContent className="max-w-sm">
+          <div className="text-center space-y-4">
+            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${returnResult?.success ? "bg-accent/20" : "bg-destructive/20"}`}>
+              {returnResult?.success
+                ? <CheckCircle className="h-8 w-8 text-accent-foreground" />
+                : <AlertTriangle className="h-8 w-8 text-destructive" />}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">
+                {returnResult?.success ? "Retur Procesat" : "Retur Eșuat"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">{returnResult?.message}</p>
+              {returnResult?.success && returnResult.productName && (
+                <div className="border rounded-lg p-3 mt-3 space-y-1 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Produs</span><span className="font-medium">{returnResult.productName}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Vânzare</span><span className="font-mono">{returnResult.saleInternalId}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant="destructive" className="text-xs">Anulată prin retur</Badge></div>
+                </div>
+              )}
+            </div>
+            <Button className="w-full" onClick={() => { setShowReturnResult(false); setReturnResult(null); }}>
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
