@@ -445,7 +445,7 @@ export default function Admin() {
               )}
 
               {/* Cancel sale button */}
-              {selectedSale.status !== "anulat" && (
+              {selectedSale.status !== "anulat" && selectedSale.status !== "returned" && (
                 <div className="border-t border-border pt-3">
                   <Button
                     variant="destructive"
