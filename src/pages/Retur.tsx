@@ -66,7 +66,7 @@ export default function Retur() {
 
   // Focus scan input
   useEffect(() => {
-    if (mode === "cashier" && scanRef.current) {
+    if (mode === "casier" && scanRef.current) {
       scanRef.current.focus();
     }
   }, [mode]);
