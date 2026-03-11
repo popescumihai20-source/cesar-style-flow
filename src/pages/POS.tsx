@@ -276,6 +276,17 @@ export default function POS() {
 
     const parsed = parseBarcode(trimmed);
     if (parsed.isValid) {
+      console.log("[POS-SCAN] Parsed barcode:", {
+        raw: parsed.raw,
+        articol: parsed.articolCode,
+        color: parsed.colorCode,
+        producator: parsed.producatorCode,
+        permanentFlag: parsed.permanentFlag,
+        date: parsed.entryDate,
+        labelPrice: parsed.labelPrice,
+        baseId: parsed.baseId,
+      });
+
       const baseId = trimmed.substring(0, 7);
       let product = products.find(p => p.full_barcode === trimmed) || products.find(p => p.base_id === baseId);
       if (!product) {
@@ -306,7 +317,10 @@ export default function POS() {
           return;
         }
 
-        addToCart(product, null, null);
+        // Use barcode label price, NOT product.selling_price
+        const barcodePrice = parsed.labelPrice;
+        console.log("[POS-SCAN] Using barcode price:", barcodePrice, "instead of DB price:", product.selling_price);
+        addToCart(product, null, null, barcodePrice);
       } else {
         toast({ title: "Produs negăsit", description: `Cod 17 cifre: ${trimmed}`, variant: "destructive" });
       }
