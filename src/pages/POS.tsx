@@ -773,7 +773,7 @@ export default function POS() {
   }, [cashierEmployeeId, fetchProductByScanCode, storeLocation?.id, queryClient]);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] gap-3 p-2" onClick={recordActivity}>
+    <div className="flex h-[calc(100vh-3rem)] gap-2 p-2" onClick={recordActivity}>
       {/* Left: Products / Scanner */}
       <div className="flex flex-1 flex-col gap-2 min-w-0">
         {/* Header */}
@@ -840,7 +840,7 @@ export default function POS() {
         )}
 
         {/* Cart items */}
-        <div className="flex-1 overflow-auto space-y-1.5">
+        <div className="flex-1 overflow-auto space-y-2">
           {cart.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               {mode === "casier" && cashierEmployeeId ? (
@@ -848,16 +848,16 @@ export default function POS() {
                   <CashierDashboard employeeId={cashierEmployeeId} cashierName={cashierName} />
                 </div>
               ) : (
-                <p className="text-muted-foreground text-lg">Scanează cardul pentru a începe vânzarea</p>
+                <p className="text-muted-foreground text-xl">Scanează cardul pentru a începe vânzarea</p>
               )}
             </div>
           ) : (
             cart.map((item) => (
               <Card key={item.id} className={`border ${item.product.stock_general <= 0 ? "border-destructive/50" : "border-border"}`}>
-                <CardContent className="flex items-center gap-3 p-4">
+                <CardContent className="flex items-center gap-4 p-5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-base truncate">{item.product.name}</p>
+                      <p className="font-semibold text-lg truncate">{item.product.name}</p>
                       {item.variantCode && (
                         <Badge variant="secondary" className="text-xs shrink-0">{getArticolLabel(item.variantCode)}</Badge>
                       )}
@@ -867,48 +867,48 @@ export default function POS() {
                         </Badge>
                       )}
                       {item.product.stock_general <= 0 && (
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                        <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-1.5 text-base text-muted-foreground">
                       <span className="font-mono">{item.unitPrice.toFixed(2)} RON</span>
                       {item.discountPercent > 0 && (
                         <Badge variant="destructive" className="text-xs">-{item.discountPercent}%</Badge>
                       )}
                     </div>
                     {!item.isGift && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs text-muted-foreground w-16">Reducere:</span>
+                      <div className="flex items-center gap-3 mt-2.5">
+                        <span className="text-sm text-muted-foreground w-20">Reducere:</span>
                         <Slider
                           value={[item.discountPercent]}
                           onValueChange={([v]) => updateDiscount(item.id, v)}
                           max={20}
                           step={1}
-                          className="flex-1 max-w-[250px]"
+                          className="flex-1 max-w-[300px]"
                         />
-                        <span className="text-xs font-mono w-8">{item.discountPercent}%</span>
+                        <span className="text-sm font-mono w-10">{item.discountPercent}%</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                      <Minus className="h-5 w-5" />
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-14 w-14 text-xl" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <Minus className="h-6 w-6" />
                     </Button>
-                    <span className="w-10 text-center font-mono text-lg font-bold">{item.quantity}</span>
-                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                      <Plus className="h-5 w-5" />
+                    <span className="w-12 text-center font-mono text-2xl font-bold">{item.quantity}</span>
+                    <Button variant="outline" size="icon" className="h-14 w-14 text-xl" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <Plus className="h-6 w-6" />
                     </Button>
                   </div>
-                  <div className="text-right w-28">
-                    <p className="font-bold text-lg">{item.lineTotal.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">RON</p>
+                  <div className="text-right w-32">
+                    <p className="font-bold text-xl">{item.lineTotal.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">RON</p>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => toggleGift(item.id)}>
-                      <Gift className={`h-4 w-4 ${item.isGift ? "text-primary" : ""}`} />
+                  <div className="flex flex-col gap-2">
+                    <Button variant="ghost" size="icon" className="h-12 w-12" onClick={() => toggleGift(item.id)}>
+                      <Gift className={`h-5 w-5 ${item.isGift ? "text-primary" : ""}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={() => removeFromCart(item.id)}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-12 w-12 text-destructive" onClick={() => removeFromCart(item.id)}>
+                      <Trash2 className="h-5 w-5" />
                     </Button>
                   </div>
                 </CardContent>
@@ -921,20 +921,20 @@ export default function POS() {
       {/* Right: Cart summary & actions */}
       <div className="w-[420px] flex flex-col gap-2 overflow-auto shrink-0">
         <Card className="border-primary/30">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex justify-between text-sm">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex justify-between text-base">
               <span className="text-muted-foreground">Articole</span>
-              <span className="font-mono text-base">{cartItemCount}</span>
+              <span className="font-mono text-lg font-semibold">{cartItemCount}</span>
             </div>
             {cartDiscountTotal > 0 && (
-              <div className="flex justify-between text-sm text-destructive">
+              <div className="flex justify-between text-base text-destructive">
                 <span>Reduceri</span>
                 <span className="font-mono">-{cartDiscountTotal.toFixed(2)} RON</span>
               </div>
             )}
-            <div className="border-t border-border pt-3 flex justify-between items-baseline">
-              <span className="text-xl font-bold">TOTAL</span>
-              <span className="text-3xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">RON</span></span>
+            <div className="border-t border-border pt-4 flex justify-between items-baseline">
+              <span className="text-2xl font-bold">TOTAL</span>
+              <span className="text-4xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)} <span className="text-base font-normal text-muted-foreground">RON</span></span>
             </div>
           </CardContent>
         </Card>
@@ -942,17 +942,17 @@ export default function POS() {
         {/* Payment method */}
         {mode === "casier" && cart.length > 0 && (
           <Card>
-            <CardContent className="p-3 space-y-3">
-              <p className="text-sm font-medium">Metodă de plată</p>
+            <CardContent className="p-4 space-y-3">
+              <p className="text-base font-semibold">Metodă de plată</p>
               <div className="grid grid-cols-3 gap-2">
-                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <Banknote className="h-6 w-6" /><span className="text-sm font-medium">Numerar</span>
+                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-2 h-auto py-4">
+                  <Banknote className="h-7 w-7" /><span className="text-base font-semibold">Numerar</span>
                 </Button>
-                <Button variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <CreditCard className="h-6 w-6" /><span className="text-sm font-medium">Card</span>
+                <Button variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="flex flex-col gap-2 h-auto py-4">
+                  <CreditCard className="h-7 w-7" /><span className="text-base font-semibold">Card</span>
                 </Button>
-                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <ArrowLeftRight className="h-6 w-6" /><span className="text-sm font-medium">Mixt</span>
+                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-2 h-auto py-4">
+                  <ArrowLeftRight className="h-7 w-7" /><span className="text-base font-semibold">Mixt</span>
                 </Button>
               </div>
               {paymentMethod === "mixt" && (
@@ -1006,11 +1006,11 @@ export default function POS() {
         <div className="space-y-2">
           {mode === "casier" && cart.length > 0 && !returnMode && (
             <>
-              <Button className="w-full h-16 text-xl font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
-                {isMagazinLocked ? <><ShieldAlert className="h-6 w-6 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-6 w-6 mr-2" />Finalizare în Sistem</>}
+              <Button className="w-full h-20 text-2xl font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
+                {isMagazinLocked ? <><ShieldAlert className="h-7 w-7 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-7 w-7 mr-2" />Finalizare în Sistem</>}
               </Button>
-              <Button variant="destructive" className="w-full h-12 text-base" onClick={() => { clearCart(); recordActivity(); }}>
-                <X className="h-5 w-5 mr-2" />Anulare Vânzare
+              <Button variant="destructive" className="w-full h-14 text-lg" onClick={() => { clearCart(); recordActivity(); }}>
+                <X className="h-6 w-6 mr-2" />Anulare Vânzare
               </Button>
             </>
           )}
@@ -1018,19 +1018,19 @@ export default function POS() {
             <div className="space-y-2">
               <Button
                 variant={returnMode ? "destructive" : "outline"}
-                className="w-full h-14 text-base"
+                className="w-full h-16 text-lg font-semibold"
                 onClick={() => { setReturnMode(!returnMode); setScanInput(""); }}
               >
-                <RotateCcw className="h-5 w-5 mr-2" />
+                <RotateCcw className="h-6 w-6 mr-2" />
                 {returnMode ? "Ieși din Mod Retur" : "Mod Retur"}
               </Button>
               {returnMode && (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-center">
-                  <p className="font-medium text-destructive text-base">MOD RETUR ACTIV</p>
-                  <p className="text-sm text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-5 text-center">
+                  <p className="font-semibold text-destructive text-lg">MOD RETUR ACTIV</p>
+                  <p className="text-base text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
                 </div>
               )}
-              <Button variant="outline" className="w-full h-12 text-base" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
+              <Button variant="outline" className="w-full h-14 text-lg" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
             </div>
           )}
         </div>

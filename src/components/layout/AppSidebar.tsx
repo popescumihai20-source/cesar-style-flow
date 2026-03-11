@@ -60,19 +60,19 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigare</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs uppercase tracking-wider px-4 py-2">Navigare</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1 px-2">
               {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
                       end
-                      className="hover:bg-sidebar-accent/50"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      className="hover:bg-sidebar-accent/50 h-12 text-base px-3 flex items-center gap-3 rounded-lg"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                     >
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className="h-5 w-5 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
