@@ -775,7 +775,7 @@ export default function POS() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] gap-3 p-2" onClick={recordActivity}>
       {/* Left: Products / Scanner */}
-      <div className="flex flex-1 flex-col gap-4">
+      <div className="flex flex-1 flex-col gap-2 min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
