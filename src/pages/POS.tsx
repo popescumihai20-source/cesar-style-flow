@@ -840,7 +840,7 @@ export default function POS() {
         )}
 
         {/* Cart items */}
-        <div className="flex-1 overflow-auto space-y-1.5">
+        <div className="flex-1 overflow-auto space-y-2">
           {cart.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               {mode === "casier" && cashierEmployeeId ? (
@@ -848,16 +848,16 @@ export default function POS() {
                   <CashierDashboard employeeId={cashierEmployeeId} cashierName={cashierName} />
                 </div>
               ) : (
-                <p className="text-muted-foreground text-lg">Scanează cardul pentru a începe vânzarea</p>
+                <p className="text-muted-foreground text-xl">Scanează cardul pentru a începe vânzarea</p>
               )}
             </div>
           ) : (
             cart.map((item) => (
               <Card key={item.id} className={`border ${item.product.stock_general <= 0 ? "border-destructive/50" : "border-border"}`}>
-                <CardContent className="flex items-center gap-3 p-4">
+                <CardContent className="flex items-center gap-4 p-5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-base truncate">{item.product.name}</p>
+                      <p className="font-semibold text-lg truncate">{item.product.name}</p>
                       {item.variantCode && (
                         <Badge variant="secondary" className="text-xs shrink-0">{getArticolLabel(item.variantCode)}</Badge>
                       )}
@@ -867,48 +867,48 @@ export default function POS() {
                         </Badge>
                       )}
                       {item.product.stock_general <= 0 && (
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                        <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-1.5 text-base text-muted-foreground">
                       <span className="font-mono">{item.unitPrice.toFixed(2)} RON</span>
                       {item.discountPercent > 0 && (
                         <Badge variant="destructive" className="text-xs">-{item.discountPercent}%</Badge>
                       )}
                     </div>
                     {!item.isGift && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs text-muted-foreground w-16">Reducere:</span>
+                      <div className="flex items-center gap-3 mt-2.5">
+                        <span className="text-sm text-muted-foreground w-20">Reducere:</span>
                         <Slider
                           value={[item.discountPercent]}
                           onValueChange={([v]) => updateDiscount(item.id, v)}
                           max={20}
                           step={1}
-                          className="flex-1 max-w-[250px]"
+                          className="flex-1 max-w-[300px]"
                         />
-                        <span className="text-xs font-mono w-8">{item.discountPercent}%</span>
+                        <span className="text-sm font-mono w-10">{item.discountPercent}%</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                      <Minus className="h-5 w-5" />
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-14 w-14 text-xl" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <Minus className="h-6 w-6" />
                     </Button>
-                    <span className="w-10 text-center font-mono text-lg font-bold">{item.quantity}</span>
-                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                      <Plus className="h-5 w-5" />
+                    <span className="w-12 text-center font-mono text-2xl font-bold">{item.quantity}</span>
+                    <Button variant="outline" size="icon" className="h-14 w-14 text-xl" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <Plus className="h-6 w-6" />
                     </Button>
                   </div>
-                  <div className="text-right w-28">
-                    <p className="font-bold text-lg">{item.lineTotal.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">RON</p>
+                  <div className="text-right w-32">
+                    <p className="font-bold text-xl">{item.lineTotal.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">RON</p>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => toggleGift(item.id)}>
-                      <Gift className={`h-4 w-4 ${item.isGift ? "text-primary" : ""}`} />
+                  <div className="flex flex-col gap-2">
+                    <Button variant="ghost" size="icon" className="h-12 w-12" onClick={() => toggleGift(item.id)}>
+                      <Gift className={`h-5 w-5 ${item.isGift ? "text-primary" : ""}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={() => removeFromCart(item.id)}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-12 w-12 text-destructive" onClick={() => removeFromCart(item.id)}>
+                      <Trash2 className="h-5 w-5" />
                     </Button>
                   </div>
                 </CardContent>
