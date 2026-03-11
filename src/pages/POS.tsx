@@ -773,7 +773,7 @@ export default function POS() {
   }, [cashierEmployeeId, fetchProductByScanCode, storeLocation?.id, queryClient]);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] gap-3 p-2" onClick={recordActivity}>
+    <div className="flex h-[calc(100vh-3rem)] gap-2 p-2" onClick={recordActivity}>
       {/* Left: Products / Scanner */}
       <div className="flex flex-1 flex-col gap-2 min-w-0">
         {/* Header */}
