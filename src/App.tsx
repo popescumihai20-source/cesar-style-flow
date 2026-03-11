@@ -11,6 +11,7 @@ import POS from "@/pages/POS";
 import Produse from "@/pages/Produse";
 import Receptie from "@/pages/Receptie";
 import ScoatereStoc from "@/pages/ScoatereStoc";
+import Retur from "@/pages/Retur";
 import Admin from "@/pages/Admin";
 import Transferuri from "@/pages/Transferuri";
 import NotFound from "@/pages/NotFound";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/pos" element={<POS />} />
+              <Route path="/retur" element={<Retur />} />
               <Route path="/produse" element={
                 <ProtectedRoute allowedRoles={["admin"]}>
                   <Produse />
