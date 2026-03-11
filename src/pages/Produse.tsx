@@ -346,8 +346,8 @@ export default function Produse() {
                           return prodName ? <span className="block text-[10px] text-muted-foreground font-normal">{prodName}</span> : null;
                         })()}
                       </TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.brand || "—"}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
                       <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.selling_price.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
