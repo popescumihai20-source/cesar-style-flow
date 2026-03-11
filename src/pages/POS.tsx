@@ -840,29 +840,29 @@ export default function POS() {
         )}
 
         {/* Cart items */}
-        <div className="flex-1 overflow-auto space-y-2">
+        <div className="flex-1 overflow-auto space-y-1.5">
           {cart.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               {mode === "casier" && cashierEmployeeId ? (
-                <div className="w-full max-w-lg">
+                <div className="w-full max-w-2xl">
                   <CashierDashboard employeeId={cashierEmployeeId} cashierName={cashierName} />
                 </div>
               ) : (
-                <p className="text-muted-foreground">Scanează cardul pentru a începe vânzarea</p>
+                <p className="text-muted-foreground text-lg">Scanează cardul pentru a începe vânzarea</p>
               )}
             </div>
           ) : (
             cart.map((item) => (
               <Card key={item.id} className={`border ${item.product.stock_general <= 0 ? "border-destructive/50" : "border-border"}`}>
-                <CardContent className="flex items-center gap-4 p-3">
+                <CardContent className="flex items-center gap-3 p-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium truncate">{item.product.name}</p>
+                      <p className="font-semibold text-base truncate">{item.product.name}</p>
                       {item.variantCode && (
-                        <Badge variant="secondary" className="text-xs">{getArticolLabel(item.variantCode)}</Badge>
+                        <Badge variant="secondary" className="text-xs shrink-0">{getArticolLabel(item.variantCode)}</Badge>
                       )}
                       {item.isGift && (
-                        <Badge className="bg-primary/20 text-primary text-xs">
+                        <Badge className="bg-primary/20 text-primary text-xs shrink-0">
                           <Gift className="h-3 w-3 mr-1" />CADOU
                         </Badge>
                       )}
@@ -871,7 +871,7 @@ export default function POS() {
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                      <span>{item.unitPrice.toFixed(2)} RON</span>
+                      <span className="font-mono">{item.unitPrice.toFixed(2)} RON</span>
                       {item.discountPercent > 0 && (
                         <Badge variant="destructive" className="text-xs">-{item.discountPercent}%</Badge>
                       )}
@@ -884,31 +884,31 @@ export default function POS() {
                           onValueChange={([v]) => updateDiscount(item.id, v)}
                           max={20}
                           step={1}
-                          className="flex-1 max-w-[200px]"
+                          className="flex-1 max-w-[250px]"
                         />
                         <span className="text-xs font-mono w-8">{item.discountPercent}%</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                      <Minus className="h-3 w-3" />
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <Minus className="h-5 w-5" />
                     </Button>
-                    <span className="w-8 text-center font-mono text-sm">{item.quantity}</span>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                      <Plus className="h-3 w-3" />
+                    <span className="w-10 text-center font-mono text-lg font-bold">{item.quantity}</span>
+                    <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <Plus className="h-5 w-5" />
                     </Button>
                   </div>
-                  <div className="text-right w-24">
-                    <p className="font-bold">{item.lineTotal.toFixed(2)}</p>
+                  <div className="text-right w-28">
+                    <p className="font-bold text-lg">{item.lineTotal.toFixed(2)}</p>
                     <p className="text-xs text-muted-foreground">RON</p>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleGift(item.id)}>
-                      <Gift className={`h-3 w-3 ${item.isGift ? "text-primary" : ""}`} />
+                  <div className="flex flex-col gap-1.5">
+                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => toggleGift(item.id)}>
+                      <Gift className={`h-4 w-4 ${item.isGift ? "text-primary" : ""}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeFromCart(item.id)}>
-                      <Trash2 className="h-3 w-3" />
+                    <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={() => removeFromCart(item.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardContent>
