@@ -18,10 +18,10 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, comp
     [".", "0", "⌫"],
   ];
 
-  const btnSize = compact ? "h-11 text-base" : "h-14 text-xl";
+  const btnSize = compact ? "h-11 text-base" : "h-[3.5rem] text-2xl";
 
   return (
-    <div className={cn("grid grid-cols-3", compact ? "gap-1" : "gap-2")}>
+    <div className={cn("grid grid-cols-3 flex-1", compact ? "gap-1" : "gap-2")}>
       {keys.map((row) =>
         row.map((key) => {
           if (key === "⌫") {
@@ -33,7 +33,7 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, comp
                 onClick={onBackspace}
                 type="button"
               >
-                <Delete className={compact ? "h-4 w-4" : "h-6 w-6"} />
+                <Delete className={compact ? "h-4 w-4" : "h-7 w-7"} />
               </Button>
             );
           }
@@ -52,7 +52,7 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, comp
       )}
       <Button
         variant="destructive"
-        className={cn(btnSize, "font-medium col-span-1")}
+        className={cn(btnSize, "font-bold col-span-1")}
         onClick={onClear}
         type="button"
       >
@@ -60,11 +60,11 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, comp
       </Button>
       <Button
         variant="default"
-        className={cn(btnSize, "font-bold col-span-2")}
+        className={cn(btnSize, "font-bold col-span-2 text-lg")}
         onClick={onEnter}
         type="button"
       >
-        <CornerDownLeft className={compact ? "h-4 w-4 mr-1" : "h-5 w-5 mr-2"} />
+        <CornerDownLeft className={compact ? "h-4 w-4 mr-1" : "h-6 w-6 mr-2"} />
         ENTER
       </Button>
     </div>
