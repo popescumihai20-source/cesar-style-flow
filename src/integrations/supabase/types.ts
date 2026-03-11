@@ -698,6 +698,103 @@ export type Database = {
           },
         ]
       }
+      return_items: {
+        Row: {
+          created_at: string
+          id: string
+          line_total: number
+          product_id: string
+          quantity: number
+          return_id: string
+          sale_item_id: string
+          unit_price: number
+          variant_code: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_total: number
+          product_id: string
+          quantity?: number
+          return_id: string
+          sale_item_id: string
+          unit_price: number
+          variant_code?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_total?: number
+          product_id?: string
+          quantity?: number
+          return_id?: string
+          sale_item_id?: string
+          unit_price?: number
+          variant_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "return_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_items_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "returns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_items_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      returns: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          reason: string | null
+          sale_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          reason?: string | null
+          sale_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          reason?: string | null
+          sale_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "returns_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_audit_log: {
         Row: {
           created_at: string
