@@ -777,26 +777,26 @@ export default function POS() {
       {/* Left: Products / Scanner */}
       <div className="flex flex-1 flex-col gap-2 min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ShoppingCart className="h-7 w-7 text-primary" />
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5 text-primary" />
             <div>
-              <h1 className="text-xl font-bold">Punct de Vânzare</h1>
-              <p className="text-xs text-muted-foreground">
+              <h1 className="text-base font-bold leading-tight">Punct de Vânzare</h1>
+              <p className="text-[11px] text-muted-foreground">
                 {mode === "public"
-                  ? "Mod PUBLIC — scanează cardul de angajat"
+                  ? "Mod PUBLIC — scanează cardul"
                   : `Casier: ${cashierName}`}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {mode === "casier" && !returnMode && (
-              <Badge variant="outline" className="border-primary text-primary">
+              <Badge variant="outline" className="border-primary text-primary text-xs">
                 CASIER ACTIV
               </Badge>
             )}
             {mode === "casier" && returnMode && (
-              <Badge variant="destructive">
+              <Badge variant="destructive" className="text-xs">
                 <RotateCcw className="h-3 w-3 mr-1" />MOD RETUR
               </Badge>
             )}
@@ -804,6 +804,7 @@ export default function POS() {
               variant="ghost"
               size="sm"
               onClick={() => { setShowSearch(true); setSearchQuery(""); }}
+              className="h-9"
             >
               <Search className="h-4 w-4 mr-1" />
               Căutare
