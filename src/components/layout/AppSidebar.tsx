@@ -1,4 +1,4 @@
-import { ShoppingCart, Package, Truck, PackageMinus, Settings, LogOut, ArrowRightLeft } from "lucide-react";
+import { ShoppingCart, Package, Truck, PackageMinus, Settings, LogOut, ArrowRightLeft, RotateCcw } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
