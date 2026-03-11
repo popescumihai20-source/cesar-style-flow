@@ -921,20 +921,20 @@ export default function POS() {
       {/* Right: Cart summary & actions */}
       <div className="w-[420px] flex flex-col gap-2 overflow-auto shrink-0">
         <Card className="border-primary/30">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex justify-between text-sm">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex justify-between text-base">
               <span className="text-muted-foreground">Articole</span>
-              <span className="font-mono text-base">{cartItemCount}</span>
+              <span className="font-mono text-lg font-semibold">{cartItemCount}</span>
             </div>
             {cartDiscountTotal > 0 && (
-              <div className="flex justify-between text-sm text-destructive">
+              <div className="flex justify-between text-base text-destructive">
                 <span>Reduceri</span>
                 <span className="font-mono">-{cartDiscountTotal.toFixed(2)} RON</span>
               </div>
             )}
-            <div className="border-t border-border pt-3 flex justify-between items-baseline">
-              <span className="text-xl font-bold">TOTAL</span>
-              <span className="text-3xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">RON</span></span>
+            <div className="border-t border-border pt-4 flex justify-between items-baseline">
+              <span className="text-2xl font-bold">TOTAL</span>
+              <span className="text-4xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)} <span className="text-base font-normal text-muted-foreground">RON</span></span>
             </div>
           </CardContent>
         </Card>
@@ -942,17 +942,17 @@ export default function POS() {
         {/* Payment method */}
         {mode === "casier" && cart.length > 0 && (
           <Card>
-            <CardContent className="p-3 space-y-3">
-              <p className="text-sm font-medium">Metodă de plată</p>
+            <CardContent className="p-4 space-y-3">
+              <p className="text-base font-semibold">Metodă de plată</p>
               <div className="grid grid-cols-3 gap-2">
-                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <Banknote className="h-6 w-6" /><span className="text-sm font-medium">Numerar</span>
+                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-2 h-auto py-4">
+                  <Banknote className="h-7 w-7" /><span className="text-base font-semibold">Numerar</span>
                 </Button>
-                <Button variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <CreditCard className="h-6 w-6" /><span className="text-sm font-medium">Card</span>
+                <Button variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="flex flex-col gap-2 h-auto py-4">
+                  <CreditCard className="h-7 w-7" /><span className="text-base font-semibold">Card</span>
                 </Button>
-                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-1.5 h-auto py-3">
-                  <ArrowLeftRight className="h-6 w-6" /><span className="text-sm font-medium">Mixt</span>
+                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-2 h-auto py-4">
+                  <ArrowLeftRight className="h-7 w-7" /><span className="text-base font-semibold">Mixt</span>
                 </Button>
               </div>
               {paymentMethod === "mixt" && (
