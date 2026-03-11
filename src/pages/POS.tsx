@@ -919,12 +919,12 @@ export default function POS() {
       </div>
 
       {/* Right: Cart summary & actions */}
-      <div className="w-96 flex flex-col gap-4 overflow-auto">
+      <div className="w-[420px] flex flex-col gap-2 overflow-auto shrink-0">
         <Card className="border-primary/30">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Articole</span>
-              <span className="font-mono">{cartItemCount}</span>
+              <span className="font-mono text-base">{cartItemCount}</span>
             </div>
             {cartDiscountTotal > 0 && (
               <div className="flex justify-between text-sm text-destructive">
@@ -932,39 +932,38 @@ export default function POS() {
                 <span className="font-mono">-{cartDiscountTotal.toFixed(2)} RON</span>
               </div>
             )}
-            <div className="border-t border-border pt-3 flex justify-between">
-              <span className="text-lg font-bold">TOTAL</span>
-              <span className="text-2xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)}</span>
+            <div className="border-t border-border pt-3 flex justify-between items-baseline">
+              <span className="text-xl font-bold">TOTAL</span>
+              <span className="text-3xl font-bold text-gold-gradient font-mono">{cartTotal.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">RON</span></span>
             </div>
-            <p className="text-xs text-right text-muted-foreground">RON</p>
           </CardContent>
         </Card>
 
         {/* Payment method */}
         {mode === "casier" && cart.length > 0 && (
           <Card>
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="p-3 space-y-3">
               <p className="text-sm font-medium">Metodă de plată</p>
               <div className="grid grid-cols-3 gap-2">
-                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} size="sm" onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-1 h-auto py-2">
-                  <Banknote className="h-4 w-4" /><span className="text-xs">Numerar</span>
+                <Button variant={paymentMethod === "numerar" ? "default" : "outline"} onClick={() => setPaymentMethod("numerar")} className="flex flex-col gap-1.5 h-auto py-3">
+                  <Banknote className="h-6 w-6" /><span className="text-sm font-medium">Numerar</span>
                 </Button>
-                <Button variant={paymentMethod === "card" ? "default" : "outline"} size="sm" onClick={() => setPaymentMethod("card")} className="flex flex-col gap-1 h-auto py-2">
-                  <CreditCard className="h-4 w-4" /><span className="text-xs">Card</span>
+                <Button variant={paymentMethod === "card" ? "default" : "outline"} onClick={() => setPaymentMethod("card")} className="flex flex-col gap-1.5 h-auto py-3">
+                  <CreditCard className="h-6 w-6" /><span className="text-sm font-medium">Card</span>
                 </Button>
-                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} size="sm" onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-1 h-auto py-2">
-                  <ArrowLeftRight className="h-4 w-4" /><span className="text-xs">Mixt</span>
+                <Button variant={paymentMethod === "mixt" ? "default" : "outline"} onClick={() => setPaymentMethod("mixt")} className="flex flex-col gap-1.5 h-auto py-3">
+                  <ArrowLeftRight className="h-6 w-6" /><span className="text-sm font-medium">Mixt</span>
                 </Button>
               </div>
               {paymentMethod === "mixt" && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Banknote className="h-4 w-4 text-muted-foreground" />
-                    <Input type="number" value={cashAmount || ""} onChange={(e) => { const v = parseFloat(e.target.value) || 0; setCashAmount(v); setCardAmount(Math.max(0, cartTotal - v)); }} placeholder="Numerar" className="h-8 text-sm" />
+                    <Banknote className="h-5 w-5 text-muted-foreground" />
+                    <Input type="number" value={cashAmount || ""} onChange={(e) => { const v = parseFloat(e.target.value) || 0; setCashAmount(v); setCardAmount(Math.max(0, cartTotal - v)); }} placeholder="Numerar" className="h-10 text-base" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    <Input type="number" value={cardAmount || ""} onChange={(e) => { const v = parseFloat(e.target.value) || 0; setCardAmount(v); setCashAmount(Math.max(0, cartTotal - v)); }} placeholder="Card" className="h-8 text-sm" />
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
+                    <Input type="number" value={cardAmount || ""} onChange={(e) => { const v = parseFloat(e.target.value) || 0; setCardAmount(v); setCashAmount(Math.max(0, cartTotal - v)); }} placeholder="Card" className="h-10 text-base" />
                   </div>
                 </div>
               )}
@@ -973,9 +972,8 @@ export default function POS() {
         )}
 
         {/* Numpad */}
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground mb-2 text-center">Numpad</p>
+        <Card className="flex-1">
+          <CardContent className="p-3 h-full flex flex-col">
             <POSNumpad
               onDigit={(d) => {
                 recordActivity();
@@ -1005,14 +1003,14 @@ export default function POS() {
         </Card>
 
         {/* Action buttons */}
-        <div className="mt-auto space-y-2">
+        <div className="space-y-2">
           {mode === "casier" && cart.length > 0 && !returnMode && (
             <>
-              <Button className="w-full h-14 text-lg font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
-                {isMagazinLocked ? <><ShieldAlert className="h-5 w-5 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-5 w-5 mr-2" />Finalizare în Sistem</>}
+              <Button className="w-full h-16 text-xl font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
+                {isMagazinLocked ? <><ShieldAlert className="h-6 w-6 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-6 w-6 mr-2" />Finalizare în Sistem</>}
               </Button>
-              <Button variant="destructive" className="w-full" onClick={() => { clearCart(); recordActivity(); }}>
-                <X className="h-4 w-4 mr-2" />Anulare Vânzare
+              <Button variant="destructive" className="w-full h-12 text-base" onClick={() => { clearCart(); recordActivity(); }}>
+                <X className="h-5 w-5 mr-2" />Anulare Vânzare
               </Button>
             </>
           )}
@@ -1020,19 +1018,19 @@ export default function POS() {
             <div className="space-y-2">
               <Button
                 variant={returnMode ? "destructive" : "outline"}
-                className="w-full h-12"
+                className="w-full h-14 text-base"
                 onClick={() => { setReturnMode(!returnMode); setScanInput(""); }}
               >
-                <RotateCcw className="h-4 w-4 mr-2" />
+                <RotateCcw className="h-5 w-5 mr-2" />
                 {returnMode ? "Ieși din Mod Retur" : "Mod Retur"}
               </Button>
               {returnMode && (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-center">
-                  <p className="font-medium text-destructive">MOD RETUR ACTIV</p>
-                  <p className="text-xs text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-center">
+                  <p className="font-medium text-destructive text-base">MOD RETUR ACTIV</p>
+                  <p className="text-sm text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
                 </div>
               )}
-              <Button variant="outline" className="w-full" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
+              <Button variant="outline" className="w-full h-12 text-base" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
             </div>
           )}
         </div>
