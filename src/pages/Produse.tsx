@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Product } from "@/types/pos";
 import { useProducatorDictionary } from "@/hooks/use-producator-dictionary";
+import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,21 @@ export default function Produse() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { activeProducatori } = useProducatorDictionary();
+  const { activeEntries: articolEntries } = useArticolDictionary();
+
+  const resolveCategory = (p: Product) => {
+    if (p.category) return p.category;
+    const artCode = p.base_id?.substring(0, 2);
+    const artName = articolEntries.find(a => a.code === artCode)?.name;
+    return artName || "Necunoscut";
+  };
+
+  const resolveBrand = (p: Product) => {
+    if (p.brand) return p.brand;
+    const prodCode = p.base_id?.substring(4, 6);
+    const prodName = activeProducatori.find(pr => pr.code === prodCode)?.name;
+    return prodName || "Necunoscut";
+  };
 
   const [form, setForm] = useState({
     base_id: "", name: "", category: "", brand: "",
@@ -330,8 +346,8 @@ export default function Produse() {
                           return prodName ? <span className="block text-[10px] text-muted-foreground font-normal">{prodName}</span> : null;
                         })()}
                       </TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{p.brand || "—"}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
+                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
                       <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.selling_price.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
@@ -403,7 +419,7 @@ export default function Produse() {
                         </Tooltip>
                       </TableCell>
                       <TableCell className={`font-medium ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
-                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
+                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={`text-right font-mono font-bold ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.stock_depozit ?? 0}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
