@@ -74,7 +74,17 @@ export default function Retur() {
   // Handle cashier card scan
   const handleCardScan = useCallback(async (code: string) => {
     if (!code.trim()) return;
-    await activateCashier(code.trim());
+    // Look up employee by card code
+    const { data: employees } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("employee_card_code", code.trim())
+      .eq("active", true)
+      .limit(1);
+
+    if (employees && employees.length > 0) {
+      activateCashier(employees[0].id, employees[0].name);
+    }
   }, [activateCashier]);
 
   // Search sale by internal_id
