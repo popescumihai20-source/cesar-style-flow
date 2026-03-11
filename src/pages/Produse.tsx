@@ -419,7 +419,7 @@ export default function Produse() {
                         </Tooltip>
                       </TableCell>
                       <TableCell className={`font-medium ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
-                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{p.category || "—"}</TableCell>
+                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={`text-right font-mono font-bold ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.stock_depozit ?? 0}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
