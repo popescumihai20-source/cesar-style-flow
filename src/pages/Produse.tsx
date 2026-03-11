@@ -42,6 +42,21 @@ export default function Produse() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { activeProducatori } = useProducatorDictionary();
+  const { activeEntries: articolEntries } = useArticolDictionary();
+
+  const resolveCategory = (p: Product) => {
+    if (p.category) return p.category;
+    const artCode = p.base_id?.substring(0, 2);
+    const artName = articolEntries.find(a => a.code === artCode)?.name;
+    return artName || "Necunoscut";
+  };
+
+  const resolveBrand = (p: Product) => {
+    if (p.brand) return p.brand;
+    const prodCode = p.base_id?.substring(4, 6);
+    const prodName = activeProducatori.find(pr => pr.code === prodCode)?.name;
+    return prodName || "Necunoscut";
+  };
 
   const [form, setForm] = useState({
     base_id: "", name: "", category: "", brand: "",
