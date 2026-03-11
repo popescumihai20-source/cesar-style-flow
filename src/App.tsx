@@ -36,6 +36,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/pos" element={<POS />} />
+              <Route path="/retur" element={<Retur />} />
               <Route path="/produse" element={
                 <ProtectedRoute allowedRoles={["admin"]}>
                   <Produse />
