@@ -653,7 +653,7 @@ export default function Retur() {
       <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-green-600">
+            <DialogTitle className="flex items-center gap-2 text-accent-foreground">
               <CheckCircle className="h-5 w-5" />
               Retur Procesat
             </DialogTitle>
