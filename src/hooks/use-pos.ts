@@ -53,8 +53,9 @@ export function usePOS() {
     lastActivityRef.current = Date.now();
   }, []);
 
-  const addToCart = useCallback((product: Product, variantCode: string | null, variantLabel: string | null) => {
+  const addToCart = useCallback((product: Product, variantCode: string | null, variantLabel: string | null, priceOverride?: number) => {
     recordActivity();
+    const unitPrice = priceOverride ?? product.selling_price;
     setCart(prev => {
       const existing = prev.find(
         item => item.product.id === product.id && item.variantCode === variantCode
@@ -76,10 +77,10 @@ export function usePOS() {
         variantCode,
         variantLabel,
         quantity: 1,
-        unitPrice: product.selling_price,
+        unitPrice,
         discountPercent: 0,
         isGift: false,
-        lineTotal: product.selling_price,
+        lineTotal: unitPrice,
       };
       return [...prev, newItem];
     });
