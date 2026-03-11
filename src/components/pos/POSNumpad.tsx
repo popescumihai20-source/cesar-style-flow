@@ -18,7 +18,7 @@ export default function POSNumpad({ onDigit, onBackspace, onClear, onEnter, comp
     [".", "0", "⌫"],
   ];
 
-  const btnSize = compact ? "h-11 text-base" : "h-[3.5rem] text-2xl";
+  const btnSize = compact ? "h-11 text-base" : "h-11 text-lg";
 
   return (
     <div className={cn("grid grid-cols-3 flex-1", compact ? "gap-1" : "gap-2")}>
