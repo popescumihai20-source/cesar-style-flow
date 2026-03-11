@@ -1006,11 +1006,11 @@ export default function POS() {
         <div className="space-y-2">
           {mode === "casier" && cart.length > 0 && !returnMode && (
             <>
-              <Button className="w-full h-16 text-xl font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
-                {isMagazinLocked ? <><ShieldAlert className="h-6 w-6 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-6 w-6 mr-2" />Finalizare în Sistem</>}
+              <Button className="w-full h-20 text-2xl font-bold" onClick={() => setShowFinalize(true)} disabled={isSubmitting || isMagazinLocked}>
+                {isMagazinLocked ? <><ShieldAlert className="h-7 w-7 mr-2" />Blocat — Inventariere</> : <><CheckCircle className="h-7 w-7 mr-2" />Finalizare în Sistem</>}
               </Button>
-              <Button variant="destructive" className="w-full h-12 text-base" onClick={() => { clearCart(); recordActivity(); }}>
-                <X className="h-5 w-5 mr-2" />Anulare Vânzare
+              <Button variant="destructive" className="w-full h-14 text-lg" onClick={() => { clearCart(); recordActivity(); }}>
+                <X className="h-6 w-6 mr-2" />Anulare Vânzare
               </Button>
             </>
           )}
@@ -1018,19 +1018,19 @@ export default function POS() {
             <div className="space-y-2">
               <Button
                 variant={returnMode ? "destructive" : "outline"}
-                className="w-full h-14 text-base"
+                className="w-full h-16 text-lg font-semibold"
                 onClick={() => { setReturnMode(!returnMode); setScanInput(""); }}
               >
-                <RotateCcw className="h-5 w-5 mr-2" />
+                <RotateCcw className="h-6 w-6 mr-2" />
                 {returnMode ? "Ieși din Mod Retur" : "Mod Retur"}
               </Button>
               {returnMode && (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-center">
-                  <p className="font-medium text-destructive text-base">MOD RETUR ACTIV</p>
-                  <p className="text-sm text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-5 text-center">
+                  <p className="font-semibold text-destructive text-lg">MOD RETUR ACTIV</p>
+                  <p className="text-base text-muted-foreground mt-1">Scanează codul de bare al produsului returnat</p>
                 </div>
               )}
-              <Button variant="outline" className="w-full h-12 text-base" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
+              <Button variant="outline" className="w-full h-14 text-lg" onClick={() => { setReturnMode(false); resetToPublic(); }}>Închide sesiunea</Button>
             </div>
           )}
         </div>
