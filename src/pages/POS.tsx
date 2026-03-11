@@ -870,7 +870,12 @@ export default function POS() {
                         <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-base text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                      <span>Categorie: {item.product.category || "Necunoscută"}</span>
+                      <span>•</span>
+                      <span>Brand: {item.product.brand || "Necunoscut"}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-base text-muted-foreground">
                       <span className="font-mono">{item.unitPrice.toFixed(2)} RON</span>
                       {item.discountPercent > 0 && (
                         <Badge variant="destructive" className="text-xs">-{item.discountPercent}%</Badge>
