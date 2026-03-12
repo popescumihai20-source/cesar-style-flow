@@ -55,18 +55,23 @@ export function usePOS() {
 
   const addToCart = useCallback((product: Product, variantCode: string | null, variantLabel: string | null, priceOverride?: number) => {
     recordActivity();
-    const unitPrice = priceOverride ?? product.selling_price;
+    const unitPrice = Number(priceOverride ?? product.selling_price) || 0;
+    console.log("[CART-ADD] Adding product:", product.name, "| unitPrice:", unitPrice, "| priceOverride:", priceOverride, "| DB price:", product.selling_price);
     setCart(prev => {
+      // Only merge if same product AND same unitPrice — different barcode prices = separate rows
       const existing = prev.find(
-        item => item.product.id === product.id && item.variantCode === variantCode
+        item => item.product.id === product.id && item.variantCode === variantCode && item.unitPrice === unitPrice
       );
       if (existing) {
+        const newQty = existing.quantity + 1;
+        const newLineTotal = newQty * existing.unitPrice * (1 - existing.discountPercent / 100);
+        console.log("[CART-MERGE] Merged:", product.name, "| qty:", newQty, "| unitPrice:", existing.unitPrice, "| disc:", existing.discountPercent, "% | lineTotal:", newLineTotal);
         return prev.map(item =>
           item.id === existing.id
             ? {
                 ...item,
-                quantity: item.quantity + 1,
-                lineTotal: (item.quantity + 1) * item.unitPrice * (1 - item.discountPercent / 100),
+                quantity: newQty,
+                lineTotal: newLineTotal,
               }
             : item
         );
@@ -82,6 +87,7 @@ export function usePOS() {
         isGift: false,
         lineTotal: unitPrice,
       };
+      console.log("[CART-NEW] New item:", product.name, "| unitPrice:", unitPrice, "| lineTotal:", unitPrice);
       return [...prev, newItem];
     });
   }, [recordActivity]);
@@ -97,10 +103,12 @@ export function usePOS() {
       prev.map(item => {
         if (item.id !== itemId) return item;
         const disc = Math.min(Math.max(discountPercent, 0), item.isGift ? 100 : 20);
+        const newLineTotal = item.quantity * item.unitPrice * (1 - disc / 100);
+        console.log("[CART-DISCOUNT]", item.product.name, "| disc:", disc, "% | lineTotal:", newLineTotal);
         return {
           ...item,
           discountPercent: disc,
-          lineTotal: item.quantity * item.unitPrice * (1 - disc / 100),
+          lineTotal: newLineTotal,
         };
       })
     );
@@ -147,6 +155,17 @@ export function usePOS() {
     0
   );
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Debug: log full cart breakdown on every change
+  useEffect(() => {
+    if (cart.length === 0) return;
+    console.log("[CART-TOTALS] === Cart Breakdown ===");
+    cart.forEach((item, i) => {
+      console.log(`[CART-TOTALS] Row ${i + 1}: "${item.product.name}" | unitPrice=${item.unitPrice} | qty=${item.quantity} | disc=${item.discountPercent}% | lineTotal=${item.lineTotal}`);
+    });
+    console.log(`[CART-TOTALS] cartTotal=${cartTotal} | cartDiscountTotal=${cartDiscountTotal} | cartItemCount=${cartItemCount}`);
+    console.log(`[CART-TOTALS] Verify sum: ${cart.map(i => i.lineTotal).join(' + ')} = ${cart.reduce((s, i) => s + i.lineTotal, 0)}`);
+  }, [cart, cartTotal, cartDiscountTotal, cartItemCount]);
 
   return {
     mode,
