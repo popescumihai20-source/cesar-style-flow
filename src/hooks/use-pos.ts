@@ -156,6 +156,17 @@ export function usePOS() {
   );
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Debug: log full cart breakdown on every change
+  useEffect(() => {
+    if (cart.length === 0) return;
+    console.log("[CART-TOTALS] === Cart Breakdown ===");
+    cart.forEach((item, i) => {
+      console.log(`[CART-TOTALS] Row ${i + 1}: "${item.product.name}" | unitPrice=${item.unitPrice} | qty=${item.quantity} | disc=${item.discountPercent}% | lineTotal=${item.lineTotal}`);
+    });
+    console.log(`[CART-TOTALS] cartTotal=${cartTotal} | cartDiscountTotal=${cartDiscountTotal} | cartItemCount=${cartItemCount}`);
+    console.log(`[CART-TOTALS] Verify sum: ${cart.map(i => i.lineTotal).join(' + ')} = ${cart.reduce((s, i) => s + i.lineTotal, 0)}`);
+  }, [cart, cartTotal, cartDiscountTotal, cartItemCount]);
+
   return {
     mode,
     cart,
