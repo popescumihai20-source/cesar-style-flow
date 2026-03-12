@@ -9,6 +9,8 @@ interface ImportLine {
   description: string;
   quantity: number;
   barcode: string;
+  sourceLineNumber: number;
+  rawQuantity: string;
 }
 
 interface ValidationError {
@@ -16,6 +18,37 @@ interface ValidationError {
   description: string;
   barcode: string;
   reason: string;
+}
+
+/**
+ * Locale-aware number parsing.
+ * Handles European (1.234,56) and US (1,234.56) formats,
+ * plus plain integers. Returns null for unparseable values.
+ */
+function parseNumericValue(value: string | number | null): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return value;
+
+  let cleaned = value.toString().replace(/\s/g, "").replace(/[R$\u20AC$]/g, "");
+
+  const lastDot = cleaned.lastIndexOf(".");
+  const lastComma = cleaned.lastIndexOf(",");
+
+  if (lastDot === -1 && lastComma === -1) {
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : Math.round(num);
+  }
+
+  if (lastDot > lastComma) {
+    // US/UK format: 1,234.56 — remove thousand separators
+    cleaned = cleaned.replace(/,/g, "");
+  } else if (lastComma > lastDot) {
+    // European format: 1.234,56 — remove thousand separators, convert decimal
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  }
+
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : Math.round(num);
 }
 
 function detectDelimiter(firstLine: string): string {
@@ -33,7 +66,6 @@ function isHeaderLine(line: string): boolean {
 }
 
 function splitLine(line: string, delimiter: string): string[] {
-  // For tab and semicolon, simple split
   if (delimiter === "\t" || delimiter === ";") {
     return line.split(delimiter).map(f => f.trim());
   }
@@ -81,40 +113,56 @@ function parseCSV(rawText: string): { valid: ImportLine[]; errors: ValidationErr
   const firstNonEmpty = rawLines.find(l => l.trim().length > 0) || "";
   const delimiter = detectDelimiter(firstNonEmpty);
 
+  console.log(`[IMPORT-PARSE] Total raw lines: ${rawLines.length}, delimiter: "${delimiter === "\t" ? "TAB" : delimiter}"`);
+
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i].replace(/[,;\t]+$/, "").trim();
     if (!raw) continue;
-    if (isHeaderLine(raw)) continue;
+    if (isHeaderLine(raw)) {
+      console.log(`[IMPORT-PARSE] Line ${i + 1}: SKIPPED (header) → "${raw.substring(0, 80)}"`);
+      continue;
+    }
 
     const fields = splitLine(raw, delimiter);
     if (fields.length < 3) {
-      errors.push({ line: i + 1, description: fields[0] || "", barcode: "", reason: "Mai puțin de 3 coloane" });
+      const reason = `Mai puțin de 3 coloane (${fields.length} găsite)`;
+      console.log(`[IMPORT-PARSE] Line ${i + 1}: ERROR → ${reason} → "${raw.substring(0, 80)}"`);
+      errors.push({ line: i + 1, description: fields[0] || "", barcode: "", reason });
       continue;
     }
 
     const description = fields[0].trim();
-    const qtyStr = fields[1].trim();
+    const rawQtyStr = fields[1].trim();
     const barcode = fields[2].trim();
 
     if (!description) {
-      errors.push({ line: i + 1, description: "", barcode, reason: "Descriere lipsă" });
+      const reason = "Descriere lipsă";
+      console.log(`[IMPORT-PARSE] Line ${i + 1}: ERROR → ${reason}`);
+      errors.push({ line: i + 1, description: "", barcode, reason });
       continue;
     }
 
-    const quantity = parseInt(qtyStr, 10);
-    if (isNaN(quantity) || quantity < 0) {
-      errors.push({ line: i + 1, description, barcode, reason: `Cantitate invalidă: "${qtyStr}"` });
+    // Use locale-aware parsing instead of plain parseInt
+    const quantity = parseNumericValue(rawQtyStr);
+    if (quantity === null || quantity < 0) {
+      const reason = `Cantitate invalidă: "${rawQtyStr}" (parsed as ${quantity})`;
+      console.log(`[IMPORT-PARSE] Line ${i + 1}: ERROR → ${reason} → desc="${description}"`);
+      errors.push({ line: i + 1, description, barcode, reason });
       continue;
     }
 
     if (!/^\d{17}$/.test(barcode)) {
-      errors.push({ line: i + 1, description, barcode, reason: `Cod invalid (${barcode.length} cifre, trebuie 17)` });
+      const reason = `Cod invalid (${barcode.length} cifre, trebuie 17): "${barcode}"`;
+      console.log(`[IMPORT-PARSE] Line ${i + 1}: ERROR → ${reason} → desc="${description}", qty=${quantity}`);
+      errors.push({ line: i + 1, description, barcode, reason });
       continue;
     }
 
-    valid.push({ description, quantity, barcode });
+    console.log(`[IMPORT-PARSE] Line ${i + 1}: OK → desc="${description}", rawQty="${rawQtyStr}", parsedQty=${quantity}, barcode=${barcode}`);
+    valid.push({ description, quantity, barcode, sourceLineNumber: i + 1, rawQuantity: rawQtyStr });
   }
 
+  console.log(`[IMPORT-PARSE] Result: ${valid.length} valid, ${errors.length} errors`);
   return { valid, errors };
 }
 
@@ -176,7 +224,7 @@ Deno.serve(async (req) => {
 
     const { valid: lines, errors: validationErrors } = parseCSV(csvText);
 
-    console.log(`Parsed ${lines.length} valid lines, ${validationErrors.length} errors for ${locationLabel}`);
+    console.log(`[IMPORT] Parsed ${lines.length} valid lines, ${validationErrors.length} errors for ${locationLabel}`);
 
     if (lines.length === 0) {
       return new Response(
@@ -189,16 +237,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Aggregate by base_id (first 7 digits)
-    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number; fullBarcode: string }>();
+    // Aggregate by base_id (first 7 digits) — log each merge for debugging
+    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number; fullBarcode: string; sourceRows: { line: number; qty: number; rawQty: string; barcode: string }[] }>();
     for (const line of lines) {
       const baseId = line.barcode.substring(0, 7);
       const price = parseInt(line.barcode.substring(13, 17), 10);
       const existing = aggregated.get(baseId);
       if (existing) {
         existing.totalQty += line.quantity;
+        existing.sourceRows.push({ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode });
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${existing.description}"): merged line ${line.sourceLineNumber} qty=${line.quantity} → cumulative=${existing.totalQty}`);
       } else {
-        aggregated.set(baseId, { baseId, description: line.description, totalQty: line.quantity, price, fullBarcode: line.barcode });
+        aggregated.set(baseId, {
+          baseId,
+          description: line.description,
+          totalQty: line.quantity,
+          price,
+          fullBarcode: line.barcode,
+          sourceRows: [{ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode }],
+        });
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${line.description}"): NEW entry, line ${line.sourceLineNumber}, qty=${line.quantity}`);
+      }
+    }
+
+    // Debug: log all aggregated products with row breakdowns
+    for (const [baseId, item] of aggregated) {
+      console.log(`[IMPORT-AGG-FINAL] baseId=${baseId} desc="${item.description}" totalQty=${item.totalQty} from ${item.sourceRows.length} rows:`);
+      for (const row of item.sourceRows) {
+        console.log(`  → line ${row.line}: rawQty="${row.rawQty}" parsedQty=${row.qty} barcode=${row.barcode}`);
       }
     }
 
@@ -208,7 +274,7 @@ Deno.serve(async (req) => {
 
     // Fetch existing products to know which exist
     const baseIds = Array.from(aggregated.keys());
-    const existingMap = new Map<string, { id: string; full_barcode: string | null }>(); // base_id -> product
+    const existingMap = new Map<string, { id: string; full_barcode: string | null }>();
 
     for (let i = 0; i < baseIds.length; i += 100) {
       const chunk = baseIds.slice(i, i + 100);
@@ -219,13 +285,10 @@ Deno.serve(async (req) => {
     }
 
     // LOCATION-SAFE: For existing products, ONLY update the target stock field
-    // NEVER touch the other location's stock
     for (const [baseId, item] of aggregated) {
       const existingProduct = existingMap.get(baseId);
       if (existingProduct) {
-        // Update ONLY the target stock field
         const updateData: Record<string, unknown> = { [stockField]: item.totalQty, active: true };
-        // Save full_barcode only once, do not overwrite existing value
         if (!existingProduct.full_barcode) {
           updateData.full_barcode = item.fullBarcode;
         }
@@ -235,17 +298,17 @@ Deno.serve(async (req) => {
           .eq("id", existingProduct.id);
         if (!error) {
           updated++;
-          // Sync inventory_stock
+          console.log(`[IMPORT-DB] UPDATED baseId=${baseId} "${item.description}" ${stockField}=${item.totalQty}`);
           if (inventoryLocationId) {
             await supabase.from("inventory_stock").upsert(
               { product_id: existingProduct.id, location_id: inventoryLocationId, quantity: item.totalQty },
               { onConflict: "product_id,location_id" }
             );
           }
+        } else {
+          console.error(`[IMPORT-DB] Update error for ${baseId}:`, error.message);
         }
-        else console.error(`Update error for ${baseId}:`, error.message);
       } else {
-        // Insert new product with ONLY the target location's stock set
         const newProduct: Record<string, unknown> = {
           base_id: baseId,
           name: item.description,
@@ -259,19 +322,20 @@ Deno.serve(async (req) => {
         const { data: inserted, error } = await supabase.from("products").insert(newProduct).select("id").single();
         if (!error && inserted) {
           created++;
-          // Sync inventory_stock
+          console.log(`[IMPORT-DB] CREATED baseId=${baseId} "${item.description}" ${stockField}=${item.totalQty}`);
           if (inventoryLocationId) {
             await supabase.from("inventory_stock").upsert(
               { product_id: inserted.id, location_id: inventoryLocationId, quantity: item.totalQty },
               { onConflict: "product_id,location_id" }
             );
           }
+        } else {
+          console.error(`[IMPORT-DB] Insert error for ${baseId}:`, error?.message);
         }
-        else console.error(`Insert error for ${baseId}:`, error?.message);
       }
     }
 
-    console.log(`Import ${locationLabel}: ${created} created, ${updated} updated, qty=${totalQuantity}`);
+    console.log(`[IMPORT] Complete for ${locationLabel}: ${created} created, ${updated} updated, totalQty=${totalQuantity}`);
 
     return new Response(
       JSON.stringify({
@@ -290,7 +354,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("Import error:", err);
+    console.error("[IMPORT] Fatal error:", err);
     return new Response(
       JSON.stringify({ success: false, error: String(err?.message || err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
