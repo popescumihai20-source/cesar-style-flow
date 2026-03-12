@@ -103,10 +103,12 @@ export function usePOS() {
       prev.map(item => {
         if (item.id !== itemId) return item;
         const disc = Math.min(Math.max(discountPercent, 0), item.isGift ? 100 : 20);
+        const newLineTotal = item.quantity * item.unitPrice * (1 - disc / 100);
+        console.log("[CART-DISCOUNT]", item.product.name, "| disc:", disc, "% | lineTotal:", newLineTotal);
         return {
           ...item,
           discountPercent: disc,
-          lineTotal: item.quantity * item.unitPrice * (1 - disc / 100),
+          lineTotal: newLineTotal,
         };
       })
     );
