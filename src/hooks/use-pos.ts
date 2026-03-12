@@ -55,18 +55,23 @@ export function usePOS() {
 
   const addToCart = useCallback((product: Product, variantCode: string | null, variantLabel: string | null, priceOverride?: number) => {
     recordActivity();
-    const unitPrice = priceOverride ?? product.selling_price;
+    const unitPrice = Number(priceOverride ?? product.selling_price) || 0;
+    console.log("[CART-ADD] Adding product:", product.name, "| unitPrice:", unitPrice, "| priceOverride:", priceOverride, "| DB price:", product.selling_price);
     setCart(prev => {
+      // Only merge if same product AND same unitPrice — different barcode prices = separate rows
       const existing = prev.find(
-        item => item.product.id === product.id && item.variantCode === variantCode
+        item => item.product.id === product.id && item.variantCode === variantCode && item.unitPrice === unitPrice
       );
       if (existing) {
+        const newQty = existing.quantity + 1;
+        const newLineTotal = newQty * existing.unitPrice * (1 - existing.discountPercent / 100);
+        console.log("[CART-MERGE] Merged:", product.name, "| qty:", newQty, "| unitPrice:", existing.unitPrice, "| disc:", existing.discountPercent, "% | lineTotal:", newLineTotal);
         return prev.map(item =>
           item.id === existing.id
             ? {
                 ...item,
-                quantity: item.quantity + 1,
-                lineTotal: (item.quantity + 1) * item.unitPrice * (1 - item.discountPercent / 100),
+                quantity: newQty,
+                lineTotal: newLineTotal,
               }
             : item
         );
@@ -82,6 +87,7 @@ export function usePOS() {
         isGift: false,
         lineTotal: unitPrice,
       };
+      console.log("[CART-NEW] New item:", product.name, "| unitPrice:", unitPrice, "| lineTotal:", unitPrice);
       return [...prev, newItem];
     });
   }, [recordActivity]);
