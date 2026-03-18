@@ -1,0 +1,1 @@
+ALTER TABLE public.inventory_stock ADD COLUMN IF NOT EXISTS stock_value numeric NOT NULL DEFAULT 0;

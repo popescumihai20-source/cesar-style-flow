@@ -111,30 +111,56 @@ export default function Produse() {
     },
   });
 
+  // Fetch stock values from inventory_stock (pre-computed during import)
+  const { data: inventoryStockData = [] } = useQuery({
+    queryKey: ["inventory-stock-values"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inventory_stock")
+        .select("product_id, location_id, quantity, stock_value, inventory_locations(type)");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const stockValueDebug = useMemo(() => {
+    // Build a map: product_id → { depozitValue, magazinValue, depozitQty, magazinQty }
+    const stockMap = new Map<string, { depozitValue: number; magazinValue: number; depozitQty: number; magazinQty: number }>();
+    for (const row of inventoryStockData) {
+      const locType = (row as any).inventory_locations?.type;
+      const entry = stockMap.get(row.product_id) || { depozitValue: 0, magazinValue: 0, depozitQty: 0, magazinQty: 0 };
+      if (locType === "warehouse") {
+        entry.depozitValue += Number(row.stock_value || 0);
+        entry.depozitQty += Number(row.quantity || 0);
+      } else if (locType === "store") {
+        entry.magazinValue += Number(row.stock_value || 0);
+        entry.magazinQty += Number(row.quantity || 0);
+      }
+      stockMap.set(row.product_id, entry);
+    }
+
     let rowsSkipped = 0;
     let depozitTotal = 0;
     let magazinTotal = 0;
     const rows: StockValueDebugRow[] = products.map((p) => {
       const barcode = String((p as any).full_barcode || "").trim();
-      const price = extractPriceFromBarcode(p);
-      const quantityMagazin = Number(p.stock_general || 0);
-      const quantityDepozit = Number((p as any).stock_depozit || 0);
-      const quantity = quantityMagazin + quantityDepozit;
-      const magazinLineValue = (price ?? 0) * quantityMagazin;
-      const depozitLineValue = (price ?? 0) * quantityDepozit;
-      const lineValue = magazinLineValue + depozitLineValue;
-      const status = price === null ? "skipped_invalid_barcode" : "included";
+      const stockEntry = stockMap.get(p.id);
+      const depozitValue = stockEntry?.depozitValue ?? 0;
+      const magazinValue = stockEntry?.magazinValue ?? 0;
+      const lineValue = depozitValue + magazinValue;
+      const quantity = (stockEntry?.depozitQty ?? 0) + (stockEntry?.magazinQty ?? 0);
+      const hasValue = lineValue > 0 || quantity > 0;
+      const status = hasValue ? "included" : "skipped_invalid_barcode";
 
-      if (status === "skipped_invalid_barcode") rowsSkipped += 1;
-      magazinTotal += magazinLineValue;
-      depozitTotal += depozitLineValue;
+      if (!hasValue && quantity === 0) rowsSkipped += 1;
+      magazinTotal += magazinValue;
+      depozitTotal += depozitValue;
 
       return {
         id: p.id,
         name: p.name,
         barcode,
-        extractedPrice: price,
+        extractedPrice: null, // no longer derived from barcode
         quantity,
         lineValue,
         status,
@@ -156,7 +182,7 @@ export default function Produse() {
       expectedTotal: Number.isNaN(expected) ? null : expected,
       difference,
     };
-  }, [products, expectedTotalInput]);
+  }, [products, inventoryStockData, expectedTotalInput]);
 
   const filtered = products.filter(p => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
