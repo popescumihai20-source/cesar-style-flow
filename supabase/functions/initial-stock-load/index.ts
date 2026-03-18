@@ -495,6 +495,7 @@ Deno.serve(async (req) => {
     }
 
     const unmatchedRows = results.filter((r) => r.status === "error" && r.reason?.includes("Nicio potrivire"));
+    const totalValue = Array.from(aggregated.values()).reduce((s, a) => s + a.totalValue, 0);
 
     return new Response(
       JSON.stringify({
@@ -512,6 +513,7 @@ Deno.serve(async (req) => {
           inventoryStockWriteErrors,
           writeMode: "replace_existing_quantity",
           writesTo: [stockField, "inventory_stock.quantity"],
+          totalValue,
           location: locationLabel,
         },
         debug: {
