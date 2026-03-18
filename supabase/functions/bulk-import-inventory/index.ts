@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[IMPORT] Complete for ${locationLabel}: ${created} created, ${updated} updated, totalQty=${totalQuantity}`);
+    console.log(`[IMPORT] Complete for ${locationLabel}: ${created} created, ${updated} updated, totalQty=${totalQuantity}, totalValue=${totalValue}`);
 
     return new Response(
       JSON.stringify({
@@ -348,6 +348,7 @@ Deno.serve(async (req) => {
           created,
           updated,
           totalQuantity,
+          totalValue,
           location: locationLabel,
         },
         errors: validationErrors.slice(0, 50),
