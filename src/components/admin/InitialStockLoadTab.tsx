@@ -25,6 +25,37 @@ interface Summary {
   success: number;
   errors: number;
   location: string;
+  exactMatches?: number;
+  unmatchedRows?: number;
+  collisions?: number;
+  zeroQuantityRowsDetected?: number;
+  zeroQuantityRowsAssigned?: number;
+  inventoryStockWriteErrors?: number;
+  writeMode?: string;
+  writesTo?: string[];
+}
+
+interface ZeroQuantitySourceRow {
+  sourceLineNumber: number;
+  barcode: string;
+  stableKey: string;
+  sourceProductName: string;
+  rawQuantity: string;
+  parsedQuantity: number;
+  delimiter: string;
+  rawLine: string;
+  fields: string[];
+}
+
+interface ZeroQuantityDebugRow {
+  stableKey: string;
+  assignedQuantity: number;
+  matchedProductId: string | null;
+  matchedProductName: string | null;
+  matchStatus: "matched" | "unmatched" | "collision";
+  collisionProductIds: string[];
+  reason: string;
+  sourceRows: ZeroQuantitySourceRow[];
 }
 
 async function fileToCSV(file: File): Promise<string> {
@@ -33,7 +64,7 @@ async function fileToCSV(file: File): Promise<string> {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array", raw: false });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // raw: true ensures numeric values are output as raw numbers, not formatted text
+    // rawNumbers: true ensures numeric values are output as raw numbers, not formatted text
     // This prevents quantities like 1000 from being output as "0" or "" due to cell formatting
     return XLSX.utils.sheet_to_csv(sheet, { FS: "\t", rawNumbers: true });
   }
@@ -56,6 +87,24 @@ export default function InitialStockLoadTab() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [bulkLocation, setBulkLocation] = useState<"depozit" | "magazin">("depozit");
+  const [zeroQtyDebugRows, setZeroQtyDebugRows] = useState<ZeroQuantityDebugRow[]>([]);
+
+  const zeroQtyFlattenedRows = zeroQtyDebugRows.flatMap((group) =>
+    group.sourceRows.map((sourceRow) => ({
+      stableKey: group.stableKey,
+      matchStatus: group.matchStatus,
+      matchedProductId: group.matchedProductId,
+      matchedProductName: group.matchedProductName,
+      assignedQuantity: group.assignedQuantity,
+      reason: group.reason,
+      sourceLineNumber: sourceRow.sourceLineNumber,
+      sourceProductName: sourceRow.sourceProductName,
+      barcode: sourceRow.barcode,
+      rawQuantity: sourceRow.rawQuantity,
+      parsedQuantity: sourceRow.parsedQuantity,
+      delimiter: sourceRow.delimiter,
+    })),
+  );
 
   const invalidateQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["products-admin"] });
@@ -76,6 +125,7 @@ export default function InitialStockLoadTab() {
 
       setResults(data.results || []);
       setSummary(data.summary);
+      setZeroQtyDebugRows((data.debug?.zeroQuantityRows || []) as ZeroQuantityDebugRow[]);
       invalidateQueries();
 
       const ok = (data.results || []).filter((r: EntryResult) => r.status === "ok");
@@ -107,6 +157,7 @@ export default function InitialStockLoadTab() {
 
       setResults(data.results || []);
       setSummary(data.summary);
+      setZeroQtyDebugRows((data.debug?.zeroQuantityRows || []) as ZeroQuantityDebugRow[]);
       invalidateQueries();
       toast({
         title: `✅ Încărcare stoc inițial finalizată`,
@@ -131,6 +182,45 @@ export default function InitialStockLoadTab() {
     const a = document.createElement("a");
     a.href = url;
     a.download = "erori-incarcare-stoc.csv";
+    a.click();
+  };
+
+  const downloadZeroQtyDebug = () => {
+    if (zeroQtyFlattenedRows.length === 0) return;
+    const headers = [
+      "StableKey",
+      "MatchStatus",
+      "MatchedProductId",
+      "MatchedProductName",
+      "AssignedQuantity",
+      "SourceLine",
+      "SourceProductName",
+      "SourceBarcode",
+      "RawQuantityFromExcel",
+      "ParsedQuantity",
+      "Delimiter",
+      "Reason",
+    ];
+    const rows = zeroQtyFlattenedRows.map((r) => [
+      r.stableKey,
+      r.matchStatus,
+      r.matchedProductId || "",
+      r.matchedProductName || "",
+      r.assignedQuantity,
+      r.sourceLineNumber,
+      r.sourceProductName,
+      r.barcode,
+      r.rawQuantity,
+      r.parsedQuantity,
+      r.delimiter,
+      r.reason,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "debug-zero-quantity-rows.csv";
     a.click();
   };
 
@@ -207,7 +297,7 @@ export default function InitialStockLoadTab() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-3">
-            Format fișier: <code className="text-xs bg-muted px-1 rounded">Descriere | Cantitate | Cod (17 cifre)</code> sau <code className="text-xs bg-muted px-1 rounded">Cod | Cantitate</code>. 
+            Format fișier: <code className="text-xs bg-muted px-1 rounded">Descriere | Cantitate | Cod (17 cifre)</code> sau <code className="text-xs bg-muted px-1 rounded">Cod | Cantitate</code>.
             Doar produse <strong>existente</strong> — nu se creează produse noi.
           </p>
           <div className="flex items-center gap-3">
@@ -247,11 +337,18 @@ export default function InitialStockLoadTab() {
                 <PackageCheck className="h-4 w-4 text-green-500" />
                 Rezultat — {summary.location}
               </span>
-              {results.filter(r => r.status === "error").length > 0 && (
-                <Button variant="outline" size="sm" onClick={downloadErrors}>
-                  <FileDown className="h-3 w-3 mr-1" />Erori ({results.filter(r => r.status === "error").length})
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {zeroQtyFlattenedRows.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={downloadZeroQtyDebug}>
+                    <FileDown className="h-3 w-3 mr-1" />Debug qty=0 ({zeroQtyFlattenedRows.length})
+                  </Button>
+                )}
+                {results.filter(r => r.status === "error").length > 0 && (
+                  <Button variant="outline" size="sm" onClick={downloadErrors}>
+                    <FileDown className="h-3 w-3 mr-1" />Erori ({results.filter(r => r.status === "error").length})
+                  </Button>
+                )}
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -269,6 +366,18 @@ export default function InitialStockLoadTab() {
                 <p className={`text-lg font-bold font-mono ${summary.errors > 0 ? "text-destructive" : ""}`}>{summary.errors}</p>
               </div>
             </div>
+
+            {(summary.zeroQuantityRowsDetected ?? 0) > 0 && (
+              <div className="rounded-md border p-3 mb-4">
+                <p className="text-xs text-muted-foreground">Debug qty=0</p>
+                <p className="font-mono text-sm">
+                  Detectate: {summary.zeroQuantityRowsDetected ?? 0} | Alocate: {summary.zeroQuantityRowsAssigned ?? 0} | inventory_stock errors: {summary.inventoryStockWriteErrors ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Scriere stoc: {summary.writeMode || "—"} → {(summary.writesTo || []).join(", ")}
+                </p>
+              </div>
+            )}
 
             {results.length > 0 && (
               <div className="overflow-auto max-h-80">
@@ -302,6 +411,37 @@ export default function InitialStockLoadTab() {
                             </span>
                           ) : "Stoc setat"}
                         </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {zeroQtyFlattenedRows.length > 0 && (
+              <div className="mt-4 overflow-auto max-h-80 rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Stable Key</TableHead>
+                      <TableHead>Line</TableHead>
+                      <TableHead>Barcode</TableHead>
+                      <TableHead>Produs sursă</TableHead>
+                      <TableHead className="text-right">Raw qty (Excel)</TableHead>
+                      <TableHead className="text-right">Parsed qty</TableHead>
+                      <TableHead>Status match</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {zeroQtyFlattenedRows.map((r, idx) => (
+                      <TableRow key={`${r.stableKey}-${r.sourceLineNumber}-${idx}`}>
+                        <TableCell className="font-mono text-xs">{r.stableKey}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.sourceLineNumber}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.barcode}</TableCell>
+                        <TableCell className="text-xs">{r.sourceProductName || "—"}</TableCell>
+                        <TableCell className="text-right font-mono">{r.rawQuantity}</TableCell>
+                        <TableCell className="text-right font-mono">{r.parsedQuantity}</TableCell>
+                        <TableCell className="text-xs">{r.matchStatus}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
