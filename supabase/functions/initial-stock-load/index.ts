@@ -461,7 +461,7 @@ Deno.serve(async (req) => {
       // Update inventory_stock as REPLACE, not additive
       if (inventoryLocationId) {
         const { error: stockError } = await supabase.from("inventory_stock").upsert(
-          { product_id: product.id, location_id: inventoryLocationId, quantity: item.totalQty },
+          { product_id: product.id, location_id: inventoryLocationId, quantity: item.totalQty, stock_value: item.totalValue },
           { onConflict: "product_id,location_id" },
         );
 

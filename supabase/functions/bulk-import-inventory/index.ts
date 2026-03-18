@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
           console.log(`[IMPORT-DB] CREATED baseId=${baseId} "${item.description}" ${stockField}=${item.totalQty}`);
           if (inventoryLocationId) {
             await supabase.from("inventory_stock").upsert(
-              { product_id: inserted.id, location_id: inventoryLocationId, quantity: item.totalQty },
+              { product_id: inserted.id, location_id: inventoryLocationId, quantity: item.totalQty, stock_value: item.totalValue },
               { onConflict: "product_id,location_id" }
             );
           }
