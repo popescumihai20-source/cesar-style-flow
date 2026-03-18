@@ -237,38 +237,41 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Aggregate by base_id (first 7 digits) — log each merge for debugging
-    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number; fullBarcode: string; sourceRows: { line: number; qty: number; rawQty: string; barcode: string }[] }>();
+    // Aggregate by base_id (first 7 digits) — track totalValue as sum of (price × qty) per barcode
+    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; totalValue: number; fullBarcode: string; sourceRows: { line: number; qty: number; rawQty: string; barcode: string; price: number; lineValue: number }[] }>();
     for (const line of lines) {
       const baseId = line.barcode.substring(0, 7);
-      const price = parseInt(line.barcode.substring(13, 17), 10);
+      const price = parseInt(line.barcode.slice(-4), 10);
+      const lineValue = price * line.quantity;
       const existing = aggregated.get(baseId);
       if (existing) {
         existing.totalQty += line.quantity;
-        existing.sourceRows.push({ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode });
-        console.log(`[IMPORT-AGG] baseId=${baseId} ("${existing.description}"): merged line ${line.sourceLineNumber} qty=${line.quantity} → cumulative=${existing.totalQty}`);
+        existing.totalValue += lineValue;
+        existing.sourceRows.push({ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode, price, lineValue });
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${existing.description}"): merged line ${line.sourceLineNumber} qty=${line.quantity} price=${price} lineValue=${lineValue} → cumulativeQty=${existing.totalQty} cumulativeValue=${existing.totalValue}`);
       } else {
         aggregated.set(baseId, {
           baseId,
           description: line.description,
           totalQty: line.quantity,
-          price,
+          totalValue: lineValue,
           fullBarcode: line.barcode,
-          sourceRows: [{ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode }],
+          sourceRows: [{ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode, price, lineValue }],
         });
-        console.log(`[IMPORT-AGG] baseId=${baseId} ("${line.description}"): NEW entry, line ${line.sourceLineNumber}, qty=${line.quantity}`);
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${line.description}"): NEW entry, line ${line.sourceLineNumber}, qty=${line.quantity}, price=${price}, lineValue=${lineValue}`);
       }
     }
 
     // Debug: log all aggregated products with row breakdowns
     for (const [baseId, item] of aggregated) {
-      console.log(`[IMPORT-AGG-FINAL] baseId=${baseId} desc="${item.description}" totalQty=${item.totalQty} from ${item.sourceRows.length} rows:`);
+      console.log(`[IMPORT-AGG-FINAL] baseId=${baseId} desc="${item.description}" totalQty=${item.totalQty} totalValue=${item.totalValue} from ${item.sourceRows.length} rows:`);
       for (const row of item.sourceRows) {
-        console.log(`  → line ${row.line}: rawQty="${row.rawQty}" parsedQty=${row.qty} barcode=${row.barcode}`);
+        console.log(`  → line ${row.line}: rawQty="${row.rawQty}" parsedQty=${row.qty} barcode=${row.barcode} price=${row.price} lineValue=${row.lineValue}`);
       }
     }
 
     const totalQuantity = Array.from(aggregated.values()).reduce((s, a) => s + a.totalQty, 0);
+    const totalValue = Array.from(aggregated.values()).reduce((s, a) => s + a.totalValue, 0);
     let created = 0;
     let updated = 0;
 
@@ -310,7 +313,7 @@ Deno.serve(async (req) => {
         const newProduct: Record<string, unknown> = {
           base_id: baseId,
           name: item.description,
-          selling_price: item.price,
+          selling_price: item.sourceRows[0]?.price || 0,
           cost_price: 0,
           stock_depozit: stockField === "stock_depozit" ? item.totalQty : 0,
           stock_general: stockField === "stock_general" ? item.totalQty : 0,
@@ -333,7 +336,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[IMPORT] Complete for ${locationLabel}: ${created} created, ${updated} updated, totalQty=${totalQuantity}`);
+    console.log(`[IMPORT] Complete for ${locationLabel}: ${created} created, ${updated} updated, totalQty=${totalQuantity}, totalValue=${totalValue}`);
 
     return new Response(
       JSON.stringify({
@@ -345,6 +348,7 @@ Deno.serve(async (req) => {
           created,
           updated,
           totalQuantity,
+          totalValue,
           location: locationLabel,
         },
         errors: validationErrors.slice(0, 50),
