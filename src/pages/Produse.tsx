@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +26,16 @@ const SEASONS: Array<{ value: string; label: string }> = [
   { value: "tranzitie", label: "Tranziție" },
 ];
 
+type StockValueDebugRow = {
+  id: string;
+  name: string;
+  barcode: string;
+  extractedPrice: number | null;
+  quantity: number;
+  lineValue: number;
+  status: "included" | "skipped_invalid_barcode";
+};
+
 export default function Produse() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -44,15 +54,14 @@ export default function Produse() {
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
 
-  const extractPriceFromBarcode = (p: Product): number => {
-    const barcode = (p as any).full_barcode || p.base_id;
-    if (barcode && barcode.length >= 17) {
-      const priceStr = barcode.substring(barcode.length - 4);
-      const price = parseInt(priceStr, 10);
-      if (!isNaN(price) && price > 0) return price;
-    }
-    // Fallback to selling_price if barcode doesn't have valid price
-    return p.selling_price;
+  const [expectedTotalInput, setExpectedTotalInput] = useState("4092392");
+
+  const extractPriceFromBarcode = (p: Product): number | null => {
+    const barcode = String((p as any).full_barcode || "").trim();
+    if (!/^\d{17}$/.test(barcode)) return null;
+    const priceStr = barcode.slice(-4);
+    const price = Number.parseInt(priceStr, 10);
+    return Number.isNaN(price) ? null : price;
   };
 
   const resolveCategory = (p: Product) => {
@@ -101,6 +110,53 @@ export default function Produse() {
       return allProducts;
     },
   });
+
+  const stockValueDebug = useMemo(() => {
+    let rowsSkipped = 0;
+    let depozitTotal = 0;
+    let magazinTotal = 0;
+    const rows: StockValueDebugRow[] = products.map((p) => {
+      const barcode = String((p as any).full_barcode || "").trim();
+      const price = extractPriceFromBarcode(p);
+      const quantityMagazin = Number(p.stock_general || 0);
+      const quantityDepozit = Number((p as any).stock_depozit || 0);
+      const quantity = quantityMagazin + quantityDepozit;
+      const magazinLineValue = (price ?? 0) * quantityMagazin;
+      const depozitLineValue = (price ?? 0) * quantityDepozit;
+      const lineValue = magazinLineValue + depozitLineValue;
+      const status = price === null ? "skipped_invalid_barcode" : "included";
+
+      if (status === "skipped_invalid_barcode") rowsSkipped += 1;
+      magazinTotal += magazinLineValue;
+      depozitTotal += depozitLineValue;
+
+      return {
+        id: p.id,
+        name: p.name,
+        barcode,
+        extractedPrice: price,
+        quantity,
+        lineValue,
+        status,
+      };
+    });
+
+    const totalComputed = depozitTotal + magazinTotal;
+    const expected = Number.parseInt(expectedTotalInput, 10);
+    const difference = Number.isNaN(expected) ? null : totalComputed - expected;
+
+    return {
+      rows,
+      rowsProcessed: rows.length,
+      rowsSkipped,
+      rowsIncluded: rows.length - rowsSkipped,
+      magazinTotal,
+      depozitTotal,
+      totalComputed,
+      expectedTotal: Number.isNaN(expected) ? null : expected,
+      difference,
+    };
+  }, [products, expectedTotalInput]);
 
   const filtered = products.filter(p => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
@@ -237,6 +293,25 @@ export default function Produse() {
     const a = document.createElement("a"); a.href = url; a.download = "produse.csv"; a.click();
   };
 
+  const exportStockValueDebug = () => {
+    const headers = ["Barcode", "ExtractedPrice", "Quantity", "LineValue", "Status", "ProductName"];
+    const rows = stockValueDebug.rows.map((row) => [
+      row.barcode,
+      row.extractedPrice ?? "",
+      row.quantity,
+      row.lineValue,
+      row.status,
+      row.name,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "stock-value-debug.csv";
+    a.click();
+  };
+
   return (
     <TooltipProvider>
     <div className="space-y-4">
@@ -250,6 +325,7 @@ export default function Produse() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportStockValueDebug}>Debug CSV</Button>
           <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" />Produs Nou</Button>
         </div>
       </div>
@@ -259,19 +335,19 @@ export default function Produse() {
           <TabsTrigger value="magazin" className="gap-1.5">
             <Store className="h-3.5 w-3.5" />Magazin Ferdinand
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
+              {products.reduce((s, p) => s + (p.stock_general ?? 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
+              {stockValueDebug.magazinTotal.toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5">
             <Warehouse className="h-3.5 w-3.5" />Depozit
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) : 0), 0)} buc
+              {products.reduce((s, p) => s + (p.stock_depozit ?? 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
+              {stockValueDebug.depozitTotal.toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
         </TabsList>
@@ -359,7 +435,7 @@ export default function Produse() {
                       </TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
-                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p).toFixed(2)}</TableCell>
+                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p)?.toFixed(2) ?? "—"}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
@@ -448,6 +524,83 @@ export default function Produse() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Debug calcul valoare stoc</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows procesate</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsProcessed}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows incluse</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsIncluded}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows sărite</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsSkipped}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Total calculat</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.totalComputed.toLocaleString("ro-RO")}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label>Excel total așteptat</Label>
+              <Input
+                value={expectedTotalInput}
+                onChange={(e) => setExpectedTotalInput(e.target.value)}
+                className="font-mono"
+                placeholder="4092392"
+              />
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Diferență (calculat - Excel)</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.difference?.toLocaleString("ro-RO") ?? "—"}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Total Excel (input)</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.expectedTotal?.toLocaleString("ro-RO") ?? "—"}</p>
+            </div>
+          </div>
+
+          <div className="overflow-auto max-h-80 rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead className="text-right">Preț extras</TableHead>
+                  <TableHead className="text-right">Cantitate</TableHead>
+                  <TableHead className="text-right">Valoare linie</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stockValueDebug.rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-mono text-xs">{row.barcode || "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{row.extractedPrice ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{row.quantity}</TableCell>
+                    <TableCell className="text-right font-mono">{row.lineValue}</TableCell>
+                    <TableCell>
+                      {row.status === "included" ? (
+                        <Badge variant="secondary" className="text-xs">inclus</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">barcode invalid</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Create/Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>

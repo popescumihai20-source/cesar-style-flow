@@ -205,39 +205,55 @@ Deno.serve(async (req) => {
       parseErrors = parsed.errors;
     }
 
-    // Aggregate by base_id — SUM quantities for same product
-    const aggregated = new Map<string, { baseId: string; totalQty: number; barcodes: string[] }>();
+    // Aggregate by FULL BARCODE — SUM quantities for repeated rows of the same exact barcode
+    const aggregated = new Map<string, { barcode: string; baseId: string; totalQty: number; lineCount: number }>();
     for (const entry of entries) {
-      const baseId = entry.barcode.substring(0, 7);
-      const existing = aggregated.get(baseId);
+      const existing = aggregated.get(entry.barcode);
       if (existing) {
         existing.totalQty += entry.quantity;
-        existing.barcodes.push(entry.barcode);
+        existing.lineCount += 1;
       } else {
-        aggregated.set(baseId, { baseId, totalQty: entry.quantity, barcodes: [entry.barcode] });
+        aggregated.set(entry.barcode, {
+          barcode: entry.barcode,
+          baseId: entry.barcode.substring(0, 7),
+          totalQty: entry.quantity,
+          lineCount: 1,
+        });
       }
     }
 
-    // Fetch existing products
-    const baseIds = Array.from(aggregated.keys());
-    const existingMap = new Map<string, { id: string; name: string; currentStock: number }>();
-    for (let i = 0; i < baseIds.length; i += 100) {
-      const chunk = baseIds.slice(i, i + 100);
-      const { data } = await supabase.from("products").select(`id, base_id, name, ${stockField}`).in("base_id", chunk);
+    // Fetch existing products by exact full barcode
+    const barcodes = Array.from(aggregated.keys());
+    const existingMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number }>();
+    for (let i = 0; i < barcodes.length; i += 100) {
+      const chunk = barcodes.slice(i, i + 100);
+      const { data } = await supabase.from("products").select(`id, base_id, full_barcode, name, ${stockField}`).in("full_barcode", chunk);
       if (data) {
-        for (const p of data) existingMap.set(p.base_id, { id: p.id, name: p.name, currentStock: (p as any)[stockField] });
+        for (const p of data) {
+          const fullBarcode = (p as any).full_barcode as string;
+          existingMap.set(fullBarcode, {
+            id: p.id,
+            name: p.name,
+            baseId: p.base_id,
+            currentStock: (p as any)[stockField],
+          });
+        }
       }
     }
 
     const results: EntryResult[] = [...parseErrors];
     let successCount = 0;
 
-    for (const [baseId, item] of aggregated) {
-      const product = existingMap.get(baseId);
+    for (const [barcode, item] of aggregated) {
+      const product = existingMap.get(barcode);
       if (!product) {
         results.push({
-          barcode: item.barcodes[0], baseId, productName: "", quantity: item.totalQty,
-          status: "error", reason: "Produsul NU există în sistem. Acest modul nu creează produse noi.",
+          barcode,
+          baseId: item.baseId,
+          productName: "",
+          quantity: item.totalQty,
+          status: "error",
+          reason: "Barcode inexistent în sistem. Modulul actualizează exclusiv produse existente după codul complet de 17 cifre.",
         });
         continue;
       }
@@ -250,8 +266,12 @@ Deno.serve(async (req) => {
 
       if (error) {
         results.push({
-          barcode: item.barcodes[0], baseId, productName: product.name, quantity: item.totalQty,
-          status: "error", reason: `Eroare DB: ${error.message}`,
+          barcode,
+          baseId: product.baseId,
+          productName: product.name,
+          quantity: item.totalQty,
+          status: "error",
+          reason: `Eroare DB: ${error.message}`,
         });
         continue;
       }
@@ -264,10 +284,13 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`[INIT-STOCK] SET ${baseId} "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (location: ${locationLabel})`);
+      console.log(`[INIT-STOCK] SET ${barcode} (${product.baseId}) "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (location: ${locationLabel}, merged_rows: ${item.lineCount})`);
 
       results.push({
-        barcode: item.barcodes[0], baseId, productName: product.name, quantity: item.totalQty,
+        barcode,
+        baseId: product.baseId,
+        productName: product.name,
+        quantity: item.totalQty,
         status: "ok",
       });
       successCount++;
