@@ -31,9 +31,11 @@ async function fileToCSV(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
+    const workbook = XLSX.read(buffer, { type: "array", raw: false });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t" });
+    // raw: true ensures numeric values are output as raw numbers, not formatted text
+    // This prevents quantities like 1000 from being output as "0" or "" due to cell formatting
+    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t", rawNumbers: true });
   }
   const rawText = await file.text();
   return rawText.split(/\r?\n/).map(line => line.replace(/,+$/, "")).join("\n");

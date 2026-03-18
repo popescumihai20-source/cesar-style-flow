@@ -137,6 +137,11 @@ function parseEntries(rawText: string): { valid: StockEntry[]; errors: EntryResu
       continue;
     }
 
+    // Debug: log rows where quantity parsed as 0 to detect parsing issues
+    if (quantity === 0) {
+      console.log(`[INIT-STOCK-PARSE] WARNING: qty=0 for barcode=${barcode}, rawQtyStr="${rawQtyStr}", line=${i + 1}`);
+    }
+
     valid.push({ barcode, quantity, rawQuantity: rawQtyStr, sourceLineNumber: i + 1 });
   }
 
