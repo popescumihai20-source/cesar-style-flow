@@ -293,6 +293,25 @@ export default function Produse() {
     const a = document.createElement("a"); a.href = url; a.download = "produse.csv"; a.click();
   };
 
+  const exportStockValueDebug = () => {
+    const headers = ["Barcode", "ExtractedPrice", "Quantity", "LineValue", "Status", "ProductName"];
+    const rows = stockValueDebug.rows.map((row) => [
+      row.barcode,
+      row.extractedPrice ?? "",
+      row.quantity,
+      row.lineValue,
+      row.status,
+      row.name,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "stock-value-debug.csv";
+    a.click();
+  };
+
   return (
     <TooltipProvider>
     <div className="space-y-4">
@@ -306,6 +325,7 @@ export default function Produse() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportStockValueDebug}>Debug CSV</Button>
           <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" />Produs Nou</Button>
         </div>
       </div>
@@ -315,19 +335,19 @@ export default function Produse() {
           <TabsTrigger value="magazin" className="gap-1.5">
             <Store className="h-3.5 w-3.5" />Magazin Ferdinand
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
+              {products.reduce((s, p) => s + (p.stock_general ?? 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
+              {stockValueDebug.magazinTotal.toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5">
             <Warehouse className="h-3.5 w-3.5" />Depozit
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) : 0), 0)} buc
+              {products.reduce((s, p) => s + (p.stock_depozit ?? 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
+              {stockValueDebug.depozitTotal.toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
         </TabsList>
