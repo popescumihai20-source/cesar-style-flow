@@ -133,6 +133,8 @@ function parseEntries(rawText: string): {
   const delimiter = detectDelimiter(firstNonEmpty);
 
   console.log(`[INIT-STOCK-PARSE] Total lines: ${rawLines.length}, delimiter: "${delimiter === "\t" ? "TAB" : delimiter}"`);
+  // Log first 5 data lines for column alignment debugging
+  let debugSampleCount = 0;
 
   for (let i = 0; i < rawLines.length; i++) {
     const rawOriginal = rawLines[i];
