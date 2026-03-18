@@ -66,16 +66,49 @@ async function fileToCSV(file: File): Promise<string> {
     // on 17-digit numbers that exceed Number.MAX_SAFE_INTEGER (2^53 - 1)
     const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // raw: false ensures ALL cell values are output as strings, not numbers
-    // This is critical: without it, a barcode like 10015012501100399 becomes 10015012501100400
-    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { raw: false, defval: "", header: 1 });
-    // Convert rows back to TSV lines for the edge function parser
-    return rows.map((row: any) => {
-      if (Array.isArray(row)) {
-        return row.map((cell: any) => String(cell ?? "")).join("\t");
+    // Use named columns (default header) so we can find Cod/Cant. by name
+    // raw: false ensures ALL cell values are output as strings
+    // blankrows: false skips empty separator rows in the Excel
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { raw: false, defval: "", blankrows: false });
+
+    if (rows.length === 0) return "";
+
+    // Log detected column names for debugging
+    const sampleKeys = Object.keys(rows[0]);
+    console.log(`[XLSX-PARSE] Detected ${rows.length} rows. Column keys: ${JSON.stringify(sampleKeys)}`);
+
+    // Find the correct column names (handle trailing spaces, encoding variations)
+    const codKey = sampleKeys.find(k => /^cod$/i.test(k.trim())) || sampleKeys.find(k => /cod/i.test(k.trim()));
+    const cantKey = sampleKeys.find(k => /^cant\.?$/i.test(k.trim())) || sampleKeys.find(k => /cant/i.test(k.trim()));
+    const descKey = sampleKeys.find(k => /^(descriere|denumire|produs|desc)/i.test(k.trim())) || sampleKeys[0];
+
+    console.log(`[XLSX-PARSE] Mapped columns: Cod="${codKey}", Cant="${cantKey}", Desc="${descKey}"`);
+
+    if (!codKey) {
+      console.error(`[XLSX-PARSE] CRITICAL: No 'Cod' column found! Available keys: ${JSON.stringify(sampleKeys)}`);
+    }
+    if (!cantKey) {
+      console.error(`[XLSX-PARSE] CRITICAL: No 'Cant' column found! Available keys: ${JSON.stringify(sampleKeys)}`);
+    }
+
+    // Convert to TSV: Description \t Quantity \t Barcode
+    const lines: string[] = [];
+    let skippedEmpty = 0;
+    for (const row of rows) {
+      const cod = codKey ? String(row[codKey] ?? "").trim() : "";
+      const cant = cantKey ? String(row[cantKey] ?? "").trim() : "0";
+      const desc = descKey ? String(row[descKey] ?? "").trim() : "";
+
+      // Skip rows where cod is empty (section separators, subtotals, etc.)
+      if (!cod) {
+        skippedEmpty++;
+        continue;
       }
-      return Object.values(row).map((cell: any) => String(cell ?? "")).join("\t");
-    }).join("\n");
+
+      lines.push(`${desc}\t${cant}\t${cod}`);
+    }
+    console.log(`[XLSX-PARSE] Output: ${lines.length} data lines, ${skippedEmpty} skipped (no barcode)`);
+    return lines.join("\n");
   }
   const rawText = await file.text();
   return rawText.split(/\r?\n/).map(line => line.replace(/,+$/, "")).join("\n");
