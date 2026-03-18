@@ -62,11 +62,20 @@ async function fileToCSV(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array", raw: false });
+    // cellText: true forces barcodes to be read as strings, preventing float64 precision loss
+    // on 17-digit numbers that exceed Number.MAX_SAFE_INTEGER (2^53 - 1)
+    const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // rawNumbers: true ensures numeric values are output as raw numbers, not formatted text
-    // This prevents quantities like 1000 from being output as "0" or "" due to cell formatting
-    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t", rawNumbers: true });
+    // raw: false ensures ALL cell values are output as strings, not numbers
+    // This is critical: without it, a barcode like 10015012501100399 becomes 10015012501100400
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { raw: false, defval: "", header: 1 });
+    // Convert rows back to TSV lines for the edge function parser
+    return rows.map((row: any) => {
+      if (Array.isArray(row)) {
+        return row.map((cell: any) => String(cell ?? "")).join("\t");
+      }
+      return Object.values(row).map((cell: any) => String(cell ?? "")).join("\t");
+    }).join("\n");
   }
   const rawText = await file.text();
   return rawText.split(/\r?\n/).map(line => line.replace(/,+$/, "")).join("\n");
