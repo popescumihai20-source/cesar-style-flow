@@ -44,6 +44,17 @@ export default function Produse() {
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
 
+  const extractPriceFromBarcode = (p: Product): number => {
+    const barcode = (p as any).full_barcode || p.base_id;
+    if (barcode && barcode.length >= 17) {
+      const priceStr = barcode.substring(barcode.length - 4);
+      const price = parseInt(priceStr, 10);
+      if (!isNaN(price) && price > 0) return price;
+    }
+    // Fallback to selling_price if barcode doesn't have valid price
+    return p.selling_price;
+  };
+
   const resolveCategory = (p: Product) => {
     if (p.category) return p.category;
     const artCode = p.base_id?.substring(0, 2);
@@ -251,7 +262,7 @@ export default function Produse() {
               {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general * p.selling_price : 0), 0).toLocaleString("ro-RO")} lei
+              {products.reduce((s, p) => s + (p.active ? p.stock_general * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5">
@@ -260,7 +271,7 @@ export default function Produse() {
               {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) : 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) * p.selling_price : 0), 0).toLocaleString("ro-RO")} lei
+              {products.reduce((s, p) => s + (p.active ? (p.stock_depozit ?? 0) * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
         </TabsList>
@@ -348,7 +359,7 @@ export default function Produse() {
                       </TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
-                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{p.selling_price.toFixed(2)}</TableCell>
+                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p).toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
