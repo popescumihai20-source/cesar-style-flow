@@ -12,6 +12,7 @@ import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
 import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import InventarierTab from "@/components/admin/InventarierTab";
 import ImportInventoryTab from "@/components/admin/ImportInventoryTab";
+import InitialStockLoadTab from "@/components/admin/InitialStockLoadTab";
 import TransferReportsTab from "@/components/admin/TransferReportsTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
