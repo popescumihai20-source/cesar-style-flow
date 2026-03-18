@@ -525,6 +525,83 @@ export default function Produse() {
         </TabsContent>
       </Tabs>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Debug calcul valoare stoc</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows procesate</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsProcessed}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows incluse</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsIncluded}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Rows sărite</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsSkipped}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Total calculat</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.totalComputed.toLocaleString("ro-RO")}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label>Excel total așteptat</Label>
+              <Input
+                value={expectedTotalInput}
+                onChange={(e) => setExpectedTotalInput(e.target.value)}
+                className="font-mono"
+                placeholder="4092392"
+              />
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Diferență (calculat - Excel)</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.difference?.toLocaleString("ro-RO") ?? "—"}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Total Excel (input)</p>
+              <p className="font-mono text-lg font-semibold">{stockValueDebug.expectedTotal?.toLocaleString("ro-RO") ?? "—"}</p>
+            </div>
+          </div>
+
+          <div className="overflow-auto max-h-80 rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead className="text-right">Preț extras</TableHead>
+                  <TableHead className="text-right">Cantitate</TableHead>
+                  <TableHead className="text-right">Valoare linie</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stockValueDebug.rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-mono text-xs">{row.barcode || "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{row.extractedPrice ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{row.quantity}</TableCell>
+                    <TableCell className="text-right font-mono">{row.lineValue}</TableCell>
+                    <TableCell>
+                      {row.status === "included" ? (
+                        <Badge variant="secondary" className="text-xs">inclus</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">barcode invalid</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Create/Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
