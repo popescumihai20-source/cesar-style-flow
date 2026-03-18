@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft, PackageCheck } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
@@ -12,6 +12,7 @@ import BarcodeGeneratorTab from "@/components/admin/BarcodeGeneratorTab";
 import StockPinSettingsTab from "@/components/admin/StockPinSettingsTab";
 import InventarierTab from "@/components/admin/InventarierTab";
 import ImportInventoryTab from "@/components/admin/ImportInventoryTab";
+import InitialStockLoadTab from "@/components/admin/InitialStockLoadTab";
 import TransferReportsTab from "@/components/admin/TransferReportsTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -235,13 +236,14 @@ export default function Admin() {
           </TabsList>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) ? "default" : "outline"} size="sm" className="gap-1">
+              <Button variant={["depozit","barcode-gen","inventariere","import-inventory","initial-stock","settings"].includes(activeTab) ? "default" : "outline"} size="sm" className="gap-1">
                 {activeTab === "depozit" && <><Warehouse className="h-3 w-3" />Depozit</>}
                 {activeTab === "barcode-gen" && <><Barcode className="h-3 w-3" />Generator</>}
                 {activeTab === "inventariere" && <><ClipboardList className="h-3 w-3" />Inventariere</>}
                 {activeTab === "import-inventory" && <><Upload className="h-3 w-3" />Import</>}
+                {activeTab === "initial-stock" && <><PackageCheck className="h-3 w-3" />Stoc Inițial</>}
                 {activeTab === "settings" && <><Lock className="h-3 w-3" />Setări</>}
-                {!["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) && "Mai mult"}
+                {!["depozit","barcode-gen","inventariere","import-inventory","initial-stock","settings"].includes(activeTab) && "Mai mult"}
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -250,6 +252,7 @@ export default function Admin() {
               <DropdownMenuItem onClick={() => setActiveTab("barcode-gen")} className="gap-2"><Barcode className="h-3.5 w-3.5" />Generator Coduri</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("inventariere")} className="gap-2"><ClipboardList className="h-3.5 w-3.5" />Inventariere</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("import-inventory")} className="gap-2"><Upload className="h-3.5 w-3.5" />Import Inventar</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("initial-stock")} className="gap-2"><PackageCheck className="h-3.5 w-3.5" />Stoc Inițial</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("settings")} className="gap-2"><Lock className="h-3.5 w-3.5" />Setări</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -365,6 +368,7 @@ export default function Admin() {
         <TabsContent value="barcode-gen"><BarcodeGeneratorTab /></TabsContent>
         <TabsContent value="inventariere"><InventarierTab /></TabsContent>
         <TabsContent value="import-inventory"><ImportInventoryTab /></TabsContent>
+        <TabsContent value="initial-stock"><InitialStockLoadTab /></TabsContent>
         <TabsContent value="settings"><StockPinSettingsTab /></TabsContent>
       </Tabs>
 
