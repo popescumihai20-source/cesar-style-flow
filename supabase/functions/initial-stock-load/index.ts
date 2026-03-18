@@ -222,11 +222,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch existing products — try full_barcode first, then fallback to base_id
+    // Fetch existing products — EXACT full_barcode match ONLY (no fallback)
     const barcodes = Array.from(aggregated.keys());
     const existingMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number }>();
     
-    // Step 1: Try exact full_barcode match
     for (let i = 0; i < barcodes.length; i += 100) {
       const chunk = barcodes.slice(i, i + 100);
       const { data } = await supabase.from("products").select(`id, base_id, full_barcode, name, ${stockField}`).in("full_barcode", chunk);
@@ -243,46 +242,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: For unmatched barcodes, fallback to base_id (first 7 digits)
-    const unmatchedBarcodes = barcodes.filter(b => !existingMap.has(b));
-    if (unmatchedBarcodes.length > 0) {
-      const unmatchedBaseIds = [...new Set(unmatchedBarcodes.map(b => b.substring(0, 7)))];
-      console.log(`[INIT-STOCK] ${unmatchedBarcodes.length} barcodes unmatched by full_barcode, trying ${unmatchedBaseIds.length} base_ids`);
-      
-      // Build a map of base_id -> product for fallback
-      const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number; fullBarcode: string }>();
-      for (let i = 0; i < unmatchedBaseIds.length; i += 100) {
-        const chunk = unmatchedBaseIds.slice(i, i + 100);
-        const { data } = await supabase.from("products").select(`id, base_id, full_barcode, name, ${stockField}`).in("base_id", chunk);
-        if (data) {
-          for (const p of data) {
-            // If multiple products share same base_id, last one wins (but typically unique)
-            baseIdProductMap.set(p.base_id, {
-              id: p.id,
-              name: p.name,
-              baseId: p.base_id,
-              currentStock: (p as any)[stockField],
-              fullBarcode: (p as any).full_barcode || "",
-            });
-          }
-        }
-      }
-
-      // Map unmatched barcodes to their base_id product
-      for (const barcode of unmatchedBarcodes) {
-        const baseId = barcode.substring(0, 7);
-        const product = baseIdProductMap.get(baseId);
-        if (product) {
-          existingMap.set(barcode, {
-            id: product.id,
-            name: product.name,
-            baseId: product.baseId,
-            currentStock: product.currentStock,
-          });
-          console.log(`[INIT-STOCK] Fallback match: ${barcode} → base_id ${baseId} → "${product.name}"`);
-        }
-      }
-    }
+    const unmatchedCount = barcodes.filter(b => !existingMap.has(b)).length;
+    console.log(`[INIT-STOCK] Exact matches: ${existingMap.size}, Unmatched (no fallback): ${unmatchedCount}`);
 
     const results: EntryResult[] = [...parseErrors];
     let successCount = 0;
@@ -296,7 +257,7 @@ Deno.serve(async (req) => {
           productName: "",
           quantity: item.totalQty,
           status: "error",
-          reason: "Barcode inexistent în sistem. Modulul actualizează exclusiv produse existente după codul complet de 17 cifre.",
+          reason: `Barcode inexistent (potrivire exactă full_barcode). Nu se folosește fallback pe base_id.`,
         });
         continue;
       }
@@ -339,6 +300,9 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
+    const exactMatches = successCount;
+    const unmatchedRows = results.filter(r => r.status === "error" && r.reason?.includes("inexistent"));
+    
     return new Response(JSON.stringify({
       success: true,
       results,
@@ -346,6 +310,9 @@ Deno.serve(async (req) => {
         total: aggregated.size + parseErrors.length,
         success: successCount,
         errors: results.filter(r => r.status === "error").length,
+        exactMatches,
+        unmatchedRows: unmatchedRows.length,
+        collisions: 0,
         location: locationLabel,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
