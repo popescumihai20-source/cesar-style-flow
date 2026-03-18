@@ -264,9 +264,9 @@ Deno.serve(async (req) => {
 
     // Debug: log all aggregated products with row breakdowns
     for (const [baseId, item] of aggregated) {
-      console.log(`[IMPORT-AGG-FINAL] baseId=${baseId} desc="${item.description}" totalQty=${item.totalQty} from ${item.sourceRows.length} rows:`);
+      console.log(`[IMPORT-AGG-FINAL] baseId=${baseId} desc="${item.description}" totalQty=${item.totalQty} totalValue=${item.totalValue} from ${item.sourceRows.length} rows:`);
       for (const row of item.sourceRows) {
-        console.log(`  → line ${row.line}: rawQty="${row.rawQty}" parsedQty=${row.qty} barcode=${row.barcode}`);
+        console.log(`  → line ${row.line}: rawQty="${row.rawQty}" parsedQty=${row.qty} barcode=${row.barcode} price=${row.price} lineValue=${row.lineValue}`);
       }
     }
 
