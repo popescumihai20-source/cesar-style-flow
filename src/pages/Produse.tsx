@@ -44,6 +44,17 @@ export default function Produse() {
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
 
+  const extractPriceFromBarcode = (p: Product): number => {
+    const barcode = (p as any).full_barcode || p.base_id;
+    if (barcode && barcode.length >= 17) {
+      const priceStr = barcode.substring(barcode.length - 4);
+      const price = parseInt(priceStr, 10);
+      if (!isNaN(price) && price > 0) return price;
+    }
+    // Fallback to selling_price if barcode doesn't have valid price
+    return p.selling_price;
+  };
+
   const resolveCategory = (p: Product) => {
     if (p.category) return p.category;
     const artCode = p.base_id?.substring(0, 2);
