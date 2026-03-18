@@ -54,15 +54,14 @@ export default function Produse() {
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
 
-  const extractPriceFromBarcode = (p: Product): number => {
-    const barcode = (p as any).full_barcode || p.base_id;
-    if (barcode && barcode.length >= 17) {
-      const priceStr = barcode.substring(barcode.length - 4);
-      const price = parseInt(priceStr, 10);
-      if (!isNaN(price) && price > 0) return price;
-    }
-    // Fallback to selling_price if barcode doesn't have valid price
-    return p.selling_price;
+  const [expectedTotalInput, setExpectedTotalInput] = useState("4092392");
+
+  const extractPriceFromBarcode = (p: Product): number | null => {
+    const barcode = String((p as any).full_barcode || "").trim();
+    if (!/^\d{17}$/.test(barcode)) return null;
+    const priceStr = barcode.slice(-4);
+    const price = Number.parseInt(priceStr, 10);
+    return Number.isNaN(price) ? null : price;
   };
 
   const resolveCategory = (p: Product) => {
@@ -111,6 +110,53 @@ export default function Produse() {
       return allProducts;
     },
   });
+
+  const stockValueDebug = useMemo(() => {
+    let rowsSkipped = 0;
+    let depozitTotal = 0;
+    let magazinTotal = 0;
+    const rows: StockValueDebugRow[] = products.map((p) => {
+      const barcode = String((p as any).full_barcode || "").trim();
+      const price = extractPriceFromBarcode(p);
+      const quantityMagazin = Number(p.stock_general || 0);
+      const quantityDepozit = Number((p as any).stock_depozit || 0);
+      const quantity = quantityMagazin + quantityDepozit;
+      const magazinLineValue = (price ?? 0) * quantityMagazin;
+      const depozitLineValue = (price ?? 0) * quantityDepozit;
+      const lineValue = magazinLineValue + depozitLineValue;
+      const status = price === null ? "skipped_invalid_barcode" : "included";
+
+      if (status === "skipped_invalid_barcode") rowsSkipped += 1;
+      magazinTotal += magazinLineValue;
+      depozitTotal += depozitLineValue;
+
+      return {
+        id: p.id,
+        name: p.name,
+        barcode,
+        extractedPrice: price,
+        quantity,
+        lineValue,
+        status,
+      };
+    });
+
+    const totalComputed = depozitTotal + magazinTotal;
+    const expected = Number.parseInt(expectedTotalInput, 10);
+    const difference = Number.isNaN(expected) ? null : totalComputed - expected;
+
+    return {
+      rows,
+      rowsProcessed: rows.length,
+      rowsSkipped,
+      rowsIncluded: rows.length - rowsSkipped,
+      magazinTotal,
+      depozitTotal,
+      totalComputed,
+      expectedTotal: Number.isNaN(expected) ? null : expected,
+      difference,
+    };
+  }, [products, expectedTotalInput]);
 
   const filtered = products.filter(p => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
