@@ -20,21 +20,54 @@ interface ImportResult {
   uniqueProducts: number;
 }
 
+/**
+ * Force ALL numeric cells in a sheet to text type to prevent float64 precision loss.
+ */
+function forceSheetCellsToText(sheet: XLSX.WorkSheet): void {
+  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = sheet[addr];
+      if (cell && cell.t === "n") {
+        cell.t = "s";
+        cell.v = cell.w || String(cell.v);
+      }
+    }
+  }
+}
+
 async function fileToCSV(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    // cellText: true prevents float64 precision loss on 17-digit barcodes
     const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // raw: false forces all values as strings — critical for barcode integrity
-    const rows = XLSX.utils.sheet_to_json<any>(sheet, { raw: false, defval: "", header: 1 });
-    return rows.map((row: any) => {
-      if (Array.isArray(row)) {
-        return row.map((cell: any) => String(cell ?? "")).join("\t");
-      }
-      return Object.values(row).map((cell: any) => String(cell ?? "")).join("\t");
-    }).join("\n");
+    // Force all numeric cells to text BEFORE parsing
+    forceSheetCellsToText(sheet);
+
+    // Use named columns with robust key detection
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { raw: false, defval: "", blankrows: false });
+    if (rows.length === 0) return "";
+
+    const sampleKeys = Object.keys(rows[0]);
+    console.log(`[XLSX-IMPORT] Detected ${rows.length} rows. Column keys: ${JSON.stringify(sampleKeys)}`);
+
+    const codKey = sampleKeys.find(k => /^cod$/i.test(k.trim())) || sampleKeys.find(k => /cod/i.test(k.trim()));
+    const cantKey = sampleKeys.find(k => /^cant\.?$/i.test(k.trim())) || sampleKeys.find(k => /cant/i.test(k.trim()));
+    const descKey = sampleKeys.find(k => /^(descriere|denumire|produs|desc)/i.test(k.trim())) || sampleKeys[0];
+
+    console.log(`[XLSX-IMPORT] Mapped columns: Cod="${codKey}", Cant="${cantKey}", Desc="${descKey}"`);
+
+    const lines: string[] = [];
+    for (const row of rows) {
+      const cod = codKey ? String(row[codKey] ?? "").trim() : "";
+      const cant = cantKey ? String(row[cantKey] ?? "").trim() : "0";
+      const desc = descKey ? String(row[descKey] ?? "").trim() : "";
+      if (!cod) continue;
+      lines.push(`${desc}\t${cant}\t${cod}`);
+    }
+    return lines.join("\n");
   }
   // For CSV/TXT, read as text
   const rawText = await file.text();

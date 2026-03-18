@@ -42,9 +42,20 @@ export function ExcelImport({ onImport }: ExcelImportProps) {
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        // cellText: true prevents float64 precision loss on 17-digit barcodes
         const wb = XLSX.read(data, { type: "array", cellText: true, cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
+        // Force numeric cells to text to prevent float64 precision loss on barcodes
+        const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        for (let R = range.s.r; R <= range.e.r; R++) {
+          for (let C = range.s.c; C <= range.e.c; C++) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[addr];
+            if (cell && cell.t === "n") {
+              cell.t = "s";
+              cell.v = cell.w || String(cell.v);
+            }
+          }
+        }
         const json = XLSX.utils.sheet_to_json<any>(ws, { raw: false, defval: "" });
 
         if (json.length === 0) {
