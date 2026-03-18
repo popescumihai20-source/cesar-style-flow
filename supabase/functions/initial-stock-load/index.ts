@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
           productName: "",
           quantity: item.totalQty,
           status: "error",
-          reason: "Barcode inexistent în sistem. Modulul actualizează exclusiv produse existente după codul complet de 17 cifre.",
+          reason: `Barcode inexistent (potrivire exactă full_barcode). Nu se folosește fallback pe base_id.`,
         });
         continue;
       }
