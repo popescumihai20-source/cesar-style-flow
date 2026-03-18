@@ -368,6 +368,7 @@ export default function Admin() {
         <TabsContent value="barcode-gen"><BarcodeGeneratorTab /></TabsContent>
         <TabsContent value="inventariere"><InventarierTab /></TabsContent>
         <TabsContent value="import-inventory"><ImportInventoryTab /></TabsContent>
+        <TabsContent value="initial-stock"><InitialStockLoadTab /></TabsContent>
         <TabsContent value="settings"><StockPinSettingsTab /></TabsContent>
       </Tabs>
 
