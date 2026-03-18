@@ -205,64 +205,82 @@ Deno.serve(async (req) => {
       parseErrors = parsed.errors;
     }
 
-    // Aggregate by FULL BARCODE — SUM quantities for repeated rows of the same exact barcode
-    const aggregated = new Map<string, { barcode: string; baseId: string; totalQty: number; lineCount: number }>();
+    // Aggregate by STABLE KEY (first 7 digits = base_id) — SUM quantities for same product
+    const aggregated = new Map<string, { stableKey: string; barcodes: string[]; totalQty: number; lineCount: number }>();
     for (const entry of entries) {
-      const existing = aggregated.get(entry.barcode);
+      const stableKey = entry.barcode.substring(0, 7);
+      const existing = aggregated.get(stableKey);
       if (existing) {
         existing.totalQty += entry.quantity;
         existing.lineCount += 1;
+        if (!existing.barcodes.includes(entry.barcode)) existing.barcodes.push(entry.barcode);
       } else {
-        aggregated.set(entry.barcode, {
-          barcode: entry.barcode,
-          baseId: entry.barcode.substring(0, 7),
+        aggregated.set(stableKey, {
+          stableKey,
+          barcodes: [entry.barcode],
           totalQty: entry.quantity,
           lineCount: 1,
         });
       }
     }
 
-    // Fetch existing products — EXACT full_barcode match ONLY (no fallback)
-    const barcodes = Array.from(aggregated.keys());
-    const existingMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number }>();
-    
-    for (let i = 0; i < barcodes.length; i += 100) {
-      const chunk = barcodes.slice(i, i + 100);
-      const { data } = await supabase.from("products").select(`id, base_id, full_barcode, name, ${stockField}`).in("full_barcode", chunk);
-      if (data) {
-        for (const p of data) {
-          const fullBarcode = (p as any).full_barcode as string;
-          existingMap.set(fullBarcode, {
-            id: p.id,
-            name: p.name,
-            baseId: p.base_id,
-            currentStock: (p as any)[stockField],
-          });
-        }
+    // Fetch ALL active products from DB to build base_id lookup
+    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number }[]>();
+    let dbOffset = 0;
+    const DB_PAGE = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from("products")
+        .select(`id, base_id, name, ${stockField}`)
+        .eq("active", true)
+        .range(dbOffset, dbOffset + DB_PAGE - 1);
+      if (!data || data.length === 0) break;
+      for (const p of data) {
+        const arr = baseIdProductMap.get(p.base_id) || [];
+        arr.push({ id: p.id, name: p.name, baseId: p.base_id, currentStock: (p as any)[stockField] });
+        baseIdProductMap.set(p.base_id, arr);
       }
+      if (data.length < DB_PAGE) break;
+      dbOffset += DB_PAGE;
     }
 
-    const unmatchedCount = barcodes.filter(b => !existingMap.has(b)).length;
-    console.log(`[INIT-STOCK] Exact matches: ${existingMap.size}, Unmatched (no fallback): ${unmatchedCount}`);
+    console.log(`[INIT-STOCK] Aggregated stable keys: ${aggregated.size}, DB products loaded: ${dbOffset > 0 ? dbOffset : baseIdProductMap.size}`);
 
     const results: EntryResult[] = [...parseErrors];
     let successCount = 0;
+    let collisionCount = 0;
 
-    for (const [barcode, item] of aggregated) {
-      const product = existingMap.get(barcode);
-      if (!product) {
+    for (const [stableKey, item] of aggregated) {
+      const matches = baseIdProductMap.get(stableKey);
+
+      if (!matches || matches.length === 0) {
         results.push({
-          barcode,
-          baseId: item.baseId,
+          barcode: item.barcodes[0],
+          baseId: stableKey,
           productName: "",
           quantity: item.totalQty,
           status: "error",
-          reason: `Barcode inexistent (potrivire exactă full_barcode). Nu se folosește fallback pe base_id.`,
+          reason: `Nicio potrivire base_id="${stableKey}" în DB`,
         });
         continue;
       }
 
-      // SET stock to exact quantity (not add)
+      if (matches.length > 1) {
+        collisionCount++;
+        results.push({
+          barcode: item.barcodes[0],
+          baseId: stableKey,
+          productName: matches.map(m => m.name).join(" | "),
+          quantity: item.totalQty,
+          status: "error",
+          reason: `COLIZIUNE: ${matches.length} produse cu base_id="${stableKey}" — import blocat`,
+        });
+        continue;
+      }
+
+      // Exactly one match — safe to import
+      const product = matches[0];
+
       const { error } = await supabase
         .from("products")
         .update({ [stockField]: item.totalQty })
@@ -270,7 +288,7 @@ Deno.serve(async (req) => {
 
       if (error) {
         results.push({
-          barcode,
+          barcode: item.barcodes[0],
           baseId: product.baseId,
           productName: product.name,
           quantity: item.totalQty,
@@ -288,10 +306,10 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`[INIT-STOCK] SET ${barcode} (${product.baseId}) "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (location: ${locationLabel}, merged_rows: ${item.lineCount})`);
+      console.log(`[INIT-STOCK] SET base_id=${stableKey} "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (merged_rows: ${item.lineCount})`);
 
       results.push({
-        barcode,
+        barcode: item.barcodes[0],
         baseId: product.baseId,
         productName: product.name,
         quantity: item.totalQty,
@@ -300,9 +318,9 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
-    const exactMatches = successCount;
-    const unmatchedRows = results.filter(r => r.status === "error" && r.reason?.includes("inexistent"));
-    
+    const unmatchedRows = results.filter(r => r.status === "error" && r.reason?.includes("Nicio potrivire"));
+    const collisionRows = results.filter(r => r.status === "error" && r.reason?.includes("COLIZIUNE"));
+
     return new Response(JSON.stringify({
       success: true,
       results,
@@ -310,9 +328,9 @@ Deno.serve(async (req) => {
         total: aggregated.size + parseErrors.length,
         success: successCount,
         errors: results.filter(r => r.status === "error").length,
-        exactMatches,
+        exactMatches: successCount,
         unmatchedRows: unmatchedRows.length,
-        collisions: 0,
+        collisions: collisionCount,
         location: locationLabel,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
