@@ -144,6 +144,12 @@ function parseEntries(rawText: string): {
 
     const fields = splitLine(raw, delimiter);
 
+    // Log first 5 parsed data lines for debugging
+    if (debugSampleCount < 5) {
+      debugSampleCount++;
+      console.log(`[INIT-STOCK-SAMPLE] line=${i + 1}, fields_count=${fields.length}, fields=${JSON.stringify(fields.slice(0, 5))}`);
+    }
+
     let barcode = "";
     let rawQtyStr = "";
     let sourceProductName = "";
