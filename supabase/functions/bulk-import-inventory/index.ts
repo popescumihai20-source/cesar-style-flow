@@ -237,26 +237,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Aggregate by base_id (first 7 digits) — log each merge for debugging
-    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; price: number; fullBarcode: string; sourceRows: { line: number; qty: number; rawQty: string; barcode: string }[] }>();
+    // Aggregate by base_id (first 7 digits) — track totalValue as sum of (price × qty) per barcode
+    const aggregated = new Map<string, { baseId: string; description: string; totalQty: number; totalValue: number; fullBarcode: string; sourceRows: { line: number; qty: number; rawQty: string; barcode: string; price: number; lineValue: number }[] }>();
     for (const line of lines) {
       const baseId = line.barcode.substring(0, 7);
-      const price = parseInt(line.barcode.substring(13, 17), 10);
+      const price = parseInt(line.barcode.slice(-4), 10);
+      const lineValue = price * line.quantity;
       const existing = aggregated.get(baseId);
       if (existing) {
         existing.totalQty += line.quantity;
-        existing.sourceRows.push({ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode });
-        console.log(`[IMPORT-AGG] baseId=${baseId} ("${existing.description}"): merged line ${line.sourceLineNumber} qty=${line.quantity} → cumulative=${existing.totalQty}`);
+        existing.totalValue += lineValue;
+        existing.sourceRows.push({ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode, price, lineValue });
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${existing.description}"): merged line ${line.sourceLineNumber} qty=${line.quantity} price=${price} lineValue=${lineValue} → cumulativeQty=${existing.totalQty} cumulativeValue=${existing.totalValue}`);
       } else {
         aggregated.set(baseId, {
           baseId,
           description: line.description,
           totalQty: line.quantity,
-          price,
+          totalValue: lineValue,
           fullBarcode: line.barcode,
-          sourceRows: [{ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode }],
+          sourceRows: [{ line: line.sourceLineNumber, qty: line.quantity, rawQty: line.rawQuantity, barcode: line.barcode, price, lineValue }],
         });
-        console.log(`[IMPORT-AGG] baseId=${baseId} ("${line.description}"): NEW entry, line ${line.sourceLineNumber}, qty=${line.quantity}`);
+        console.log(`[IMPORT-AGG] baseId=${baseId} ("${line.description}"): NEW entry, line ${line.sourceLineNumber}, qty=${line.quantity}, price=${price}, lineValue=${lineValue}`);
       }
     }
 

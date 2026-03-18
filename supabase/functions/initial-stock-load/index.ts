@@ -305,12 +305,16 @@ Deno.serve(async (req) => {
     }
 
     // Aggregate by STABLE KEY (first 7 digits = base_id) — SUM quantities for same product
-    const aggregated = new Map<string, { stableKey: string; barcodes: string[]; totalQty: number; lineCount: number }>();
+    // Track totalValue as sum of (price_per_barcode × qty_per_barcode) to avoid wrong totals
+    const aggregated = new Map<string, { stableKey: string; barcodes: string[]; totalQty: number; totalValue: number; lineCount: number }>();
     for (const entry of entries) {
       const stableKey = entry.barcode.substring(0, 7);
+      const priceFromBarcode = parseInt(entry.barcode.slice(-4), 10) || 0;
+      const lineValue = priceFromBarcode * entry.quantity;
       const existing = aggregated.get(stableKey);
       if (existing) {
         existing.totalQty += entry.quantity;
+        existing.totalValue += lineValue;
         existing.lineCount += 1;
         if (!existing.barcodes.includes(entry.barcode)) existing.barcodes.push(entry.barcode);
       } else {
@@ -318,6 +322,7 @@ Deno.serve(async (req) => {
           stableKey,
           barcodes: [entry.barcode],
           totalQty: entry.quantity,
+          totalValue: lineValue,
           lineCount: 1,
         });
       }
