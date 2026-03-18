@@ -271,6 +271,7 @@ Deno.serve(async (req) => {
     }
 
     const totalQuantity = Array.from(aggregated.values()).reduce((s, a) => s + a.totalQty, 0);
+    const totalValue = Array.from(aggregated.values()).reduce((s, a) => s + a.totalValue, 0);
     let created = 0;
     let updated = 0;
 
