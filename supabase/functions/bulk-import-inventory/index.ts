@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
         const newProduct: Record<string, unknown> = {
           base_id: baseId,
           name: item.description,
-          selling_price: item.price,
+          selling_price: item.sourceRows[0]?.price || 0,
           cost_price: 0,
           stock_depozit: stockField === "stock_depozit" ? item.totalQty : 0,
           stock_general: stockField === "stock_general" ? item.totalQty : 0,
