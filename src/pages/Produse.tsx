@@ -262,7 +262,7 @@ export default function Produse() {
               {products.reduce((s, p) => s + (p.active ? p.stock_general : 0), 0)} buc
             </Badge>
             <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.active ? p.stock_general * p.selling_price : 0), 0).toLocaleString("ro-RO")} lei
+              {products.reduce((s, p) => s + (p.active ? p.stock_general * extractPriceFromBarcode(p) : 0), 0).toLocaleString("ro-RO")} lei
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="depozit" className="gap-1.5">
