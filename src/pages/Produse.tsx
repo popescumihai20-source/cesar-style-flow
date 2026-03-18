@@ -148,11 +148,15 @@ export default function Produse() {
       const depozitValue = stockEntry?.depozitValue ?? 0;
       const magazinValue = stockEntry?.magazinValue ?? 0;
       const lineValue = depozitValue + magazinValue;
-      const quantity = (stockEntry?.depozitQty ?? 0) + (stockEntry?.magazinQty ?? 0);
-      const hasValue = lineValue > 0 || quantity > 0;
-      const status = hasValue ? "included" : "skipped_invalid_barcode";
+      // Use inventory_stock qty if available, otherwise fall back to products legacy columns
+      const quantityDepozit = stockEntry?.depozitQty ?? Number((p as any).stock_depozit || 0);
+      const quantityMagazin = stockEntry?.magazinQty ?? Number(p.stock_general || 0);
+      const quantity = quantityDepozit + quantityMagazin;
+      // All products are "included" — stock_value=0 just means zero value, not invalid
+      const isValidBarcode = /^\d{17}$/.test(barcode);
+      const status = isValidBarcode ? "included" : "skipped_invalid_barcode";
 
-      if (!hasValue && quantity === 0) rowsSkipped += 1;
+      if (!isValidBarcode) rowsSkipped += 1;
       magazinTotal += magazinValue;
       depozitTotal += depozitValue;
 
@@ -160,7 +164,7 @@ export default function Produse() {
         id: p.id,
         name: p.name,
         barcode,
-        extractedPrice: null, // no longer derived from barcode
+        extractedPrice: null,
         quantity,
         lineValue,
         status,
