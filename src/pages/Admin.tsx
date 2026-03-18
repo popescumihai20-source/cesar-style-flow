@@ -236,13 +236,14 @@ export default function Admin() {
           </TabsList>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) ? "default" : "outline"} size="sm" className="gap-1">
+              <Button variant={["depozit","barcode-gen","inventariere","import-inventory","initial-stock","settings"].includes(activeTab) ? "default" : "outline"} size="sm" className="gap-1">
                 {activeTab === "depozit" && <><Warehouse className="h-3 w-3" />Depozit</>}
                 {activeTab === "barcode-gen" && <><Barcode className="h-3 w-3" />Generator</>}
                 {activeTab === "inventariere" && <><ClipboardList className="h-3 w-3" />Inventariere</>}
                 {activeTab === "import-inventory" && <><Upload className="h-3 w-3" />Import</>}
+                {activeTab === "initial-stock" && <><PackageCheck className="h-3 w-3" />Stoc Inițial</>}
                 {activeTab === "settings" && <><Lock className="h-3 w-3" />Setări</>}
-                {!["depozit","barcode-gen","inventariere","import-inventory","settings"].includes(activeTab) && "Mai mult"}
+                {!["depozit","barcode-gen","inventariere","import-inventory","initial-stock","settings"].includes(activeTab) && "Mai mult"}
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
