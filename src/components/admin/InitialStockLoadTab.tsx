@@ -35,7 +35,7 @@ async function fileToCSV(file: File): Promise<string> {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     // raw: true ensures numeric values are output as raw numbers, not formatted text
     // This prevents quantities like 1000 from being output as "0" or "" due to cell formatting
-    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t", rawNumbers: true, raw: true });
+    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t", rawNumbers: true });
   }
   const rawText = await file.text();
   return rawText.split(/\r?\n/).map(line => line.replace(/,+$/, "")).join("\n");
