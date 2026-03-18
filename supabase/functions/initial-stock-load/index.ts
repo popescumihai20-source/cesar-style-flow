@@ -10,6 +10,7 @@ interface StockEntry {
   quantity: number;
   rawQuantity: string;
   sourceLineNumber: number;
+  sourceProductName: string;
 }
 
 interface EntryResult {
@@ -19,6 +20,29 @@ interface EntryResult {
   quantity: number;
   status: "ok" | "error";
   reason?: string;
+}
+
+interface ZeroQuantitySourceRow {
+  sourceLineNumber: number;
+  barcode: string;
+  stableKey: string;
+  sourceProductName: string;
+  rawQuantity: string;
+  parsedQuantity: number;
+  delimiter: string;
+  rawLine: string;
+  fields: string[];
+}
+
+interface ZeroQuantityDebugRow {
+  stableKey: string;
+  assignedQuantity: number;
+  matchedProductId: string | null;
+  matchedProductName: string | null;
+  matchStatus: "matched" | "unmatched" | "collision";
+  collisionProductIds: string[];
+  reason: string;
+  sourceRows: ZeroQuantitySourceRow[];
 }
 
 function parseNumericValue(value: string | number | null): number | null {
@@ -56,7 +80,7 @@ function isHeaderLine(line: string): boolean {
 
 function splitLine(line: string, delimiter: string): string[] {
   if (delimiter === "\t" || delimiter === ";") {
-    return line.split(delimiter).map(f => f.trim());
+    return line.split(delimiter).map((f) => f.trim());
   }
   const fields: string[] = [];
   let current = "";
@@ -65,13 +89,24 @@ function splitLine(line: string, delimiter: string): string[] {
     const ch = line[i];
     if (inQuotes) {
       if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; }
-        else { inQuotes = false; }
-      } else { current += ch; }
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
     } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { fields.push(current.trim()); current = ""; }
-      else { current += ch; }
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        fields.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
+      }
     }
   }
   fields.push(current.trim());
@@ -83,29 +118,37 @@ function splitLine(line: string, delimiter: string): string[] {
  * (2 columns minimum — barcode first, quantity second)
  * OR: Description, Quantity, Barcode (3 columns — same as bulk import)
  */
-function parseEntries(rawText: string): { valid: StockEntry[]; errors: EntryResult[] } {
+function parseEntries(rawText: string): {
+  valid: StockEntry[];
+  errors: EntryResult[];
+  zeroQuantitySourceRows: ZeroQuantitySourceRow[];
+} {
   const valid: StockEntry[] = [];
   const errors: EntryResult[] = [];
-  if (!rawText || typeof rawText !== "string") return { valid, errors };
+  const zeroQuantitySourceRows: ZeroQuantitySourceRow[] = [];
+  if (!rawText || typeof rawText !== "string") return { valid, errors, zeroQuantitySourceRows };
 
   const rawLines = rawText.split(/\r?\n/);
-  const firstNonEmpty = rawLines.find(l => l.trim().length > 0) || "";
+  const firstNonEmpty = rawLines.find((l) => l.trim().length > 0) || "";
   const delimiter = detectDelimiter(firstNonEmpty);
 
   console.log(`[INIT-STOCK-PARSE] Total lines: ${rawLines.length}, delimiter: "${delimiter === "\t" ? "TAB" : delimiter}"`);
 
   for (let i = 0; i < rawLines.length; i++) {
-    const raw = rawLines[i].replace(/[,;\t]+$/, "").trim();
+    const rawOriginal = rawLines[i];
+    const raw = rawOriginal.replace(/[,;\t]+$/, "").trim();
     if (!raw) continue;
     if (isHeaderLine(raw)) continue;
 
     const fields = splitLine(raw, delimiter);
-    
+
     let barcode = "";
     let rawQtyStr = "";
+    let sourceProductName = "";
 
     if (fields.length >= 3) {
       // 3-column format: Description, Quantity, Barcode
+      sourceProductName = fields[0].trim();
       rawQtyStr = fields[1].trim();
       barcode = fields[2].trim();
     } else if (fields.length >= 2) {
@@ -122,30 +165,48 @@ function parseEntries(rawText: string): { valid: StockEntry[]; errors: EntryResu
         rawQtyStr = fields[1].trim();
       }
     } else {
-      errors.push({ barcode: "", baseId: "", productName: "", quantity: 0, status: "error", reason: `Linie cu mai puțin de 2 coloane` });
+      errors.push({ barcode: "", baseId: "", productName: "", quantity: 0, status: "error", reason: "Linie cu mai puțin de 2 coloane" });
       continue;
     }
 
     if (!/^\d{17}$/.test(barcode)) {
-      errors.push({ barcode, baseId: "", productName: "", quantity: 0, status: "error", reason: `Cod invalid (${barcode.length} cifre, trebuie 17)` });
+      errors.push({ barcode, baseId: "", productName: sourceProductName, quantity: 0, status: "error", reason: `Cod invalid (${barcode.length} cifre, trebuie 17)` });
       continue;
     }
 
     const quantity = parseNumericValue(rawQtyStr);
     if (quantity === null || quantity < 0) {
-      errors.push({ barcode, baseId: barcode.substring(0, 7), productName: "", quantity: 0, status: "error", reason: `Cantitate invalidă: "${rawQtyStr}"` });
+      errors.push({ barcode, baseId: barcode.substring(0, 7), productName: sourceProductName, quantity: 0, status: "error", reason: `Cantitate invalidă: "${rawQtyStr}"` });
       continue;
     }
 
-    // Debug: log rows where quantity parsed as 0 to detect parsing issues
+    // Debug: capture rows parsed as zero BEFORE DB writes
     if (quantity === 0) {
-      console.log(`[INIT-STOCK-PARSE] WARNING: qty=0 for barcode=${barcode}, rawQtyStr="${rawQtyStr}", line=${i + 1}`);
+      const debugRow: ZeroQuantitySourceRow = {
+        sourceLineNumber: i + 1,
+        barcode,
+        stableKey: barcode.substring(0, 7),
+        sourceProductName,
+        rawQuantity: rawQtyStr,
+        parsedQuantity: quantity,
+        delimiter,
+        rawLine: rawOriginal,
+        fields,
+      };
+      zeroQuantitySourceRows.push(debugRow);
+      console.log(`[INIT-STOCK-PARSE-ZERO] line=${debugRow.sourceLineNumber}, barcode=${debugRow.barcode}, stable_key=${debugRow.stableKey}, source_product="${debugRow.sourceProductName}", raw_qty="${debugRow.rawQuantity}", parsed_qty=${debugRow.parsedQuantity}, fields=${JSON.stringify(debugRow.fields)}`);
     }
 
-    valid.push({ barcode, quantity, rawQuantity: rawQtyStr, sourceLineNumber: i + 1 });
+    valid.push({
+      barcode,
+      quantity,
+      rawQuantity: rawQtyStr,
+      sourceLineNumber: i + 1,
+      sourceProductName,
+    });
   }
 
-  return { valid, errors };
+  return { valid, errors, zeroQuantitySourceRows };
 }
 
 Deno.serve(async (req) => {
@@ -157,15 +218,21 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceKey) {
-      return new Response(JSON.stringify({ success: false, error: "Missing server configuration" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: false, error: "Missing server configuration" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
     let body: Record<string, unknown>;
-    try { body = await req.json(); } catch {
-      return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const mode = body.mode as string; // "bulk" or "single"
@@ -186,28 +253,47 @@ Deno.serve(async (req) => {
 
     let entries: StockEntry[] = [];
     let parseErrors: EntryResult[] = [];
+    let zeroQuantitySourceRows: ZeroQuantitySourceRow[] = [];
 
     if (mode === "single") {
-      const barcode = (body.barcode as string || "").trim();
+      const barcode = ((body.barcode as string) || "").trim();
       const quantity = Number(body.quantity ?? 0);
       if (!/^\d{17}$/.test(barcode)) {
-        return new Response(JSON.stringify({ success: false, error: "Cod de bare invalid (trebuie 17 cifre)" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: false, error: "Cod de bare invalid (trebuie 17 cifre)" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (quantity < 0) {
-        return new Response(JSON.stringify({ success: false, error: "Cantitatea nu poate fi negativă" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: false, error: "Cantitatea nu poate fi negativă" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      entries = [{ barcode, quantity, rawQuantity: String(quantity), sourceLineNumber: 1 }];
+      entries = [{ barcode, quantity, rawQuantity: String(quantity), sourceLineNumber: 1, sourceProductName: "" }];
+      if (quantity === 0) {
+        zeroQuantitySourceRows.push({
+          sourceLineNumber: 1,
+          barcode,
+          stableKey: barcode.substring(0, 7),
+          sourceProductName: "",
+          rawQuantity: String(quantity),
+          parsedQuantity: quantity,
+          delimiter: "manual",
+          rawLine: String(quantity),
+          fields: [barcode, String(quantity)],
+        });
+      }
     } else {
-      const csvText = typeof body.csvText === "string" ? body.csvText as string : "";
+      const csvText = typeof body.csvText === "string" ? (body.csvText as string) : "";
       if (!csvText.trim()) {
-        return new Response(JSON.stringify({ success: true, results: [], summary: { total: 0, success: 0, errors: 0, location: locationLabel } }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(
+          JSON.stringify({ success: true, results: [], summary: { total: 0, success: 0, errors: 0, location: locationLabel } }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
       const parsed = parseEntries(csvText);
       entries = parsed.valid;
       parseErrors = parsed.errors;
+      zeroQuantitySourceRows = parsed.zeroQuantitySourceRows;
     }
 
     // Aggregate by STABLE KEY (first 7 digits = base_id) — SUM quantities for same product
@@ -227,6 +313,13 @@ Deno.serve(async (req) => {
           lineCount: 1,
         });
       }
+    }
+
+    const zeroQtyByStableKey = new Map<string, ZeroQuantitySourceRow[]>();
+    for (const row of zeroQuantitySourceRows) {
+      const arr = zeroQtyByStableKey.get(row.stableKey) || [];
+      arr.push(row);
+      zeroQtyByStableKey.set(row.stableKey, arr);
     }
 
     // Fetch ALL active products from DB to build base_id lookup
@@ -252,39 +345,88 @@ Deno.serve(async (req) => {
     console.log(`[INIT-STOCK] Aggregated stable keys: ${aggregated.size}, DB products loaded: ${dbOffset > 0 ? dbOffset : baseIdProductMap.size}`);
 
     const results: EntryResult[] = [...parseErrors];
+    const zeroQuantityDebugRows: ZeroQuantityDebugRow[] = [];
     let successCount = 0;
     let collisionCount = 0;
+    let inventoryStockWriteErrors = 0;
 
     for (const [stableKey, item] of aggregated) {
       const matches = baseIdProductMap.get(stableKey);
 
       if (!matches || matches.length === 0) {
+        const reason = `Nicio potrivire base_id="${stableKey}" în DB`;
         results.push({
           barcode: item.barcodes[0],
           baseId: stableKey,
           productName: "",
           quantity: item.totalQty,
           status: "error",
-          reason: `Nicio potrivire base_id="${stableKey}" în DB`,
+          reason,
         });
+
+        if (item.totalQty === 0) {
+          const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
+          zeroQuantityDebugRows.push({
+            stableKey,
+            assignedQuantity: item.totalQty,
+            matchedProductId: null,
+            matchedProductName: null,
+            matchStatus: "unmatched",
+            collisionProductIds: [],
+            reason,
+            sourceRows,
+          });
+          console.log(`[INIT-STOCK-ZERO-BEFORE-SAVE] stable_key=${stableKey}, status=unmatched, source_rows=${JSON.stringify(sourceRows)}`);
+        }
         continue;
       }
 
       if (matches.length > 1) {
         collisionCount++;
+        const reason = `COLIZIUNE: ${matches.length} produse cu base_id="${stableKey}" — import blocat`;
         results.push({
           barcode: item.barcodes[0],
           baseId: stableKey,
-          productName: matches.map(m => m.name).join(" | "),
+          productName: matches.map((m) => m.name).join(" | "),
           quantity: item.totalQty,
           status: "error",
-          reason: `COLIZIUNE: ${matches.length} produse cu base_id="${stableKey}" — import blocat`,
+          reason,
         });
+
+        if (item.totalQty === 0) {
+          const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
+          zeroQuantityDebugRows.push({
+            stableKey,
+            assignedQuantity: item.totalQty,
+            matchedProductId: null,
+            matchedProductName: null,
+            matchStatus: "collision",
+            collisionProductIds: matches.map((m) => m.id),
+            reason,
+            sourceRows,
+          });
+          console.log(`[INIT-STOCK-ZERO-BEFORE-SAVE] stable_key=${stableKey}, status=collision, source_rows=${JSON.stringify(sourceRows)}, matches=${matches.map((m) => m.id).join(",")}`);
+        }
         continue;
       }
 
       // Exactly one match — safe to import
       const product = matches[0];
+
+      if (item.totalQty === 0) {
+        const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
+        zeroQuantityDebugRows.push({
+          stableKey,
+          assignedQuantity: item.totalQty,
+          matchedProductId: product.id,
+          matchedProductName: product.name,
+          matchStatus: "matched",
+          collisionProductIds: [],
+          reason: "Cantitate 0 va fi scrisă explicit în DB (replace mode)",
+          sourceRows,
+        });
+        console.log(`[INIT-STOCK-ZERO-BEFORE-SAVE] stable_key=${stableKey}, product_id=${product.id}, product_name="${product.name}", qty=${item.totalQty}, source_rows=${JSON.stringify(sourceRows)}`);
+      }
 
       const { error } = await supabase
         .from("products")
@@ -298,20 +440,36 @@ Deno.serve(async (req) => {
           productName: product.name,
           quantity: item.totalQty,
           status: "error",
-          reason: `Eroare DB: ${error.message}`,
+          reason: `Eroare DB products: ${error.message}`,
         });
         continue;
       }
 
-      // Update inventory_stock too
+      // Update inventory_stock as REPLACE, not additive
       if (inventoryLocationId) {
-        await supabase.from("inventory_stock").upsert(
+        const { error: stockError } = await supabase.from("inventory_stock").upsert(
           { product_id: product.id, location_id: inventoryLocationId, quantity: item.totalQty },
-          { onConflict: "product_id,location_id" }
+          { onConflict: "product_id,location_id" },
         );
+
+        if (stockError) {
+          inventoryStockWriteErrors++;
+          // Best-effort rollback of products legacy column to keep consistency
+          await supabase.from("products").update({ [stockField]: product.currentStock }).eq("id", product.id);
+
+          results.push({
+            barcode: item.barcodes[0],
+            baseId: product.baseId,
+            productName: product.name,
+            quantity: item.totalQty,
+            status: "error",
+            reason: `Eroare DB inventory_stock: ${stockError.message}`,
+          });
+          continue;
+        }
       }
 
-      console.log(`[INIT-STOCK] SET base_id=${stableKey} "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (merged_rows: ${item.lineCount})`);
+      console.log(`[INIT-STOCK] SET base_id=${stableKey} "${product.name}" ${stockField}: ${product.currentStock} → ${item.totalQty} (merged_rows: ${item.lineCount}, write_mode=replace)`);
 
       results.push({
         barcode: item.barcodes[0],
@@ -323,26 +481,38 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
-    const unmatchedRows = results.filter(r => r.status === "error" && r.reason?.includes("Nicio potrivire"));
-    const collisionRows = results.filter(r => r.status === "error" && r.reason?.includes("COLIZIUNE"));
+    const unmatchedRows = results.filter((r) => r.status === "error" && r.reason?.includes("Nicio potrivire"));
 
-    return new Response(JSON.stringify({
-      success: true,
-      results,
-      summary: {
-        total: aggregated.size + parseErrors.length,
-        success: successCount,
-        errors: results.filter(r => r.status === "error").length,
-        exactMatches: successCount,
-        unmatchedRows: unmatchedRows.length,
-        collisions: collisionCount,
-        location: locationLabel,
-      },
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        results,
+        summary: {
+          total: aggregated.size + parseErrors.length,
+          success: successCount,
+          errors: results.filter((r) => r.status === "error").length,
+          exactMatches: successCount,
+          unmatchedRows: unmatchedRows.length,
+          collisions: collisionCount,
+          zeroQuantityRowsDetected: zeroQuantitySourceRows.length,
+          zeroQuantityRowsAssigned: zeroQuantityDebugRows.length,
+          inventoryStockWriteErrors,
+          writeMode: "replace_existing_quantity",
+          writesTo: [stockField, "inventory_stock.quantity"],
+          location: locationLabel,
+        },
+        debug: {
+          zeroQuantityRows: zeroQuantityDebugRows,
+          note: "Raw quantity values captured before DB write for all rows that result in assigned quantity 0",
+        },
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (err) {
     console.error("[INIT-STOCK] Fatal error:", err);
-    return new Response(JSON.stringify({ success: false, error: String(err?.message || err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: false, error: String((err as Error)?.message || err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
