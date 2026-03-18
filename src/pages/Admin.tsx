@@ -252,6 +252,7 @@ export default function Admin() {
               <DropdownMenuItem onClick={() => setActiveTab("barcode-gen")} className="gap-2"><Barcode className="h-3.5 w-3.5" />Generator Coduri</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("inventariere")} className="gap-2"><ClipboardList className="h-3.5 w-3.5" />Inventariere</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("import-inventory")} className="gap-2"><Upload className="h-3.5 w-3.5" />Import Inventar</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("initial-stock")} className="gap-2"><PackageCheck className="h-3.5 w-3.5" />Stoc Inițial</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab("settings")} className="gap-2"><Lock className="h-3.5 w-3.5" />Setări</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
