@@ -24,10 +24,17 @@ async function fileToCSV(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
+    // cellText: true prevents float64 precision loss on 17-digit barcodes
+    const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // Convert to CSV with tab delimiter to avoid issues with commas in descriptions
-    return XLSX.utils.sheet_to_csv(sheet, { FS: "\t" });
+    // raw: false forces all values as strings — critical for barcode integrity
+    const rows = XLSX.utils.sheet_to_json<any>(sheet, { raw: false, defval: "", header: 1 });
+    return rows.map((row: any) => {
+      if (Array.isArray(row)) {
+        return row.map((cell: any) => String(cell ?? "")).join("\t");
+      }
+      return Object.values(row).map((cell: any) => String(cell ?? "")).join("\t");
+    }).join("\n");
   }
   // For CSV/TXT, read as text
   const rawText = await file.text();

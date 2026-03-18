@@ -42,9 +42,10 @@ export function ExcelImport({ onImport }: ExcelImportProps) {
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array" });
+        // cellText: true prevents float64 precision loss on 17-digit barcodes
+        const wb = XLSX.read(data, { type: "array", cellText: true, cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
+        const json = XLSX.utils.sheet_to_json<any>(ws, { raw: false, defval: "" });
 
         if (json.length === 0) {
           toast({ title: "Fișierul este gol", variant: "destructive" });
