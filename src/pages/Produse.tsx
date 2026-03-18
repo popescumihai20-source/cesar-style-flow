@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +25,16 @@ const SEASONS: Array<{ value: string; label: string }> = [
   { value: "vara", label: "Vară" },
   { value: "tranzitie", label: "Tranziție" },
 ];
+
+type StockValueDebugRow = {
+  id: string;
+  name: string;
+  barcode: string;
+  extractedPrice: number | null;
+  quantity: number;
+  lineValue: number;
+  status: "included" | "skipped_invalid_barcode";
+};
 
 export default function Produse() {
   const [search, setSearch] = useState("");
