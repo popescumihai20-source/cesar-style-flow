@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft } from "lucide-react";
+import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft, PackageCheck } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
 import DevicesTab from "@/components/admin/DevicesTab";
