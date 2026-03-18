@@ -435,7 +435,7 @@ export default function Produse() {
                       </TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
-                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p).toFixed(2)}</TableCell>
+                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p)?.toFixed(2) ?? "—"}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
