@@ -288,10 +288,8 @@ Deno.serve(async (req) => {
     for (const [baseId, item] of aggregated) {
       const existingProduct = existingMap.get(baseId);
       if (existingProduct) {
-        const updateData: Record<string, unknown> = { [stockField]: item.totalQty, active: true };
-        if (!existingProduct.full_barcode) {
-          updateData.full_barcode = item.fullBarcode;
-        }
+        // ALWAYS update full_barcode to fix any previously corrupted values from float64 precision loss
+        const updateData: Record<string, unknown> = { [stockField]: item.totalQty, active: true, full_barcode: item.fullBarcode };
         const { error } = await supabase
           .from("products")
           .update(updateData)

@@ -58,14 +58,34 @@ interface ZeroQuantityDebugRow {
   sourceRows: ZeroQuantitySourceRow[];
 }
 
+/**
+ * Force ALL numeric cells in a sheet to text type.
+ * This prevents float64 precision loss on 17-digit barcodes
+ * that exceed Number.MAX_SAFE_INTEGER (2^53 - 1).
+ */
+function forceSheetCellsToText(sheet: XLSX.WorkSheet): void {
+  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = sheet[addr];
+      if (cell && cell.t === "n") {
+        // Convert number cell to string, using formatted text (.w) if available
+        cell.t = "s";
+        cell.v = cell.w || String(cell.v);
+      }
+    }
+  }
+}
+
 async function fileToCSV(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    // cellText: true forces barcodes to be read as strings, preventing float64 precision loss
-    // on 17-digit numbers that exceed Number.MAX_SAFE_INTEGER (2^53 - 1)
     const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    // Force all numeric cells to text BEFORE sheet_to_json to prevent float64 barcode corruption
+    forceSheetCellsToText(sheet);
     // Use named columns (default header) so we can find Cod/Cant. by name
     // raw: false ensures ALL cell values are output as strings
     // blankrows: false skips empty separator rows in the Excel
