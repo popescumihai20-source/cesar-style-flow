@@ -300,6 +300,9 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
+    const exactMatches = successCount;
+    const unmatchedRows = results.filter(r => r.status === "error" && r.reason?.includes("inexistent"));
+    
     return new Response(JSON.stringify({
       success: true,
       results,
@@ -307,6 +310,9 @@ Deno.serve(async (req) => {
         total: aggregated.size + parseErrors.length,
         success: successCount,
         errors: results.filter(r => r.status === "error").length,
+        exactMatches,
+        unmatchedRows: unmatchedRows.length,
+        collisions: 0,
         location: locationLabel,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
