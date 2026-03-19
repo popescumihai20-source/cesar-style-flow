@@ -328,6 +328,81 @@ export type Database = {
           },
         ]
       }
+      inventory_import_debug_lines: {
+        Row: {
+          created_at: string
+          extracted_price_from_db: number | null
+          extracted_price_from_source: number | null
+          id: string
+          import_source: string
+          line_value: number
+          location_id: string | null
+          location_name: string
+          matched_db_barcode: string | null
+          mismatch_flag: boolean
+          mismatch_reason: string | null
+          product_id: string | null
+          quantity: number
+          run_id: string
+          source_barcode: string
+          source_line_number: number | null
+          stable_key: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_price_from_db?: number | null
+          extracted_price_from_source?: number | null
+          id?: string
+          import_source: string
+          line_value?: number
+          location_id?: string | null
+          location_name: string
+          matched_db_barcode?: string | null
+          mismatch_flag?: boolean
+          mismatch_reason?: string | null
+          product_id?: string | null
+          quantity?: number
+          run_id: string
+          source_barcode: string
+          source_line_number?: number | null
+          stable_key: string
+        }
+        Update: {
+          created_at?: string
+          extracted_price_from_db?: number | null
+          extracted_price_from_source?: number | null
+          id?: string
+          import_source?: string
+          line_value?: number
+          location_id?: string | null
+          location_name?: string
+          matched_db_barcode?: string | null
+          mismatch_flag?: boolean
+          mismatch_reason?: string | null
+          product_id?: string | null
+          quantity?: number
+          run_id?: string
+          source_barcode?: string
+          source_line_number?: number | null
+          stable_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_import_debug_lines_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_import_debug_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_lines: {
         Row: {
           adjustment_reason: string | null
