@@ -45,6 +45,23 @@ interface ZeroQuantityDebugRow {
   sourceRows: ZeroQuantitySourceRow[];
 }
 
+interface ImportDebugSourceRow {
+  sourceLineNumber: number;
+  sourceBarcode: string;
+  sourceProductName: string;
+  quantity: number;
+  extractedPriceFromSource: number | null;
+  lineValue: number;
+}
+
+function extractPriceFromBarcode(barcode: string | null | undefined): number | null {
+  if (!barcode) return null;
+  const trimmed = barcode.trim();
+  if (!/^\d{17}$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed.slice(-4), 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function parseNumericValue(value: string | number | null): number | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number") return value;
