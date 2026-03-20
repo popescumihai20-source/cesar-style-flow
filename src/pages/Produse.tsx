@@ -57,7 +57,7 @@ export default function Produse() {
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
 
-  const [expectedTotalInput, setExpectedTotalInput] = useState("4092392");
+  const [expectedTotalInput, setExpectedTotalInput] = useState("4083966");
 
   const extractPriceFromBarcode = (p: Product): number | null => {
     const barcode = String((p as any).full_barcode || "").trim();
