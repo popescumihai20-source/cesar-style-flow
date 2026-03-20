@@ -45,6 +45,23 @@ interface ZeroQuantityDebugRow {
   sourceRows: ZeroQuantitySourceRow[];
 }
 
+interface ImportDebugSourceRow {
+  sourceLineNumber: number;
+  sourceBarcode: string;
+  sourceProductName: string;
+  quantity: number;
+  extractedPriceFromSource: number | null;
+  lineValue: number;
+}
+
+function extractPriceFromBarcode(barcode: string | null | undefined): number | null {
+  if (!barcode) return null;
+  const trimmed = barcode.trim();
+  if (!/^\d{17}$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed.slice(-4), 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function parseNumericValue(value: string | number | null): number | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number") return value;
@@ -306,16 +323,34 @@ Deno.serve(async (req) => {
 
     // Aggregate by STABLE KEY (first 7 digits = base_id) — SUM quantities for same product
     // Track totalValue as sum of (price_per_barcode × qty_per_barcode) to avoid wrong totals
-    const aggregated = new Map<string, { stableKey: string; barcodes: string[]; totalQty: number; totalValue: number; lineCount: number }>();
+    const aggregated = new Map<string, {
+      stableKey: string;
+      barcodes: string[];
+      totalQty: number;
+      totalValue: number;
+      lineCount: number;
+      sourceRows: ImportDebugSourceRow[];
+    }>();
+
     for (const entry of entries) {
       const stableKey = entry.barcode.substring(0, 7);
-      const priceFromBarcode = parseInt(entry.barcode.slice(-4), 10) || 0;
-      const lineValue = priceFromBarcode * entry.quantity;
+      const extractedPriceFromSource = extractPriceFromBarcode(entry.barcode);
+      const lineValue = (extractedPriceFromSource ?? 0) * entry.quantity;
+      const sourceRow: ImportDebugSourceRow = {
+        sourceLineNumber: entry.sourceLineNumber,
+        sourceBarcode: entry.barcode,
+        sourceProductName: entry.sourceProductName,
+        quantity: entry.quantity,
+        extractedPriceFromSource,
+        lineValue,
+      };
+
       const existing = aggregated.get(stableKey);
       if (existing) {
         existing.totalQty += entry.quantity;
         existing.totalValue += lineValue;
         existing.lineCount += 1;
+        existing.sourceRows.push(sourceRow);
         if (!existing.barcodes.includes(entry.barcode)) existing.barcodes.push(entry.barcode);
       } else {
         aggregated.set(stableKey, {
@@ -324,6 +359,7 @@ Deno.serve(async (req) => {
           totalQty: entry.quantity,
           totalValue: lineValue,
           lineCount: 1,
+          sourceRows: [sourceRow],
         });
       }
     }
@@ -336,19 +372,25 @@ Deno.serve(async (req) => {
     }
 
     // Fetch ALL active products from DB to build base_id lookup
-    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; currentStock: number }[]>();
+    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; fullBarcode: string | null; currentStock: number }[]>();
     let dbOffset = 0;
     const DB_PAGE = 1000;
     while (true) {
       const { data } = await supabase
         .from("products")
-        .select(`id, base_id, name, ${stockField}`)
+        .select(`id, base_id, name, full_barcode, ${stockField}`)
         .eq("active", true)
         .range(dbOffset, dbOffset + DB_PAGE - 1);
       if (!data || data.length === 0) break;
       for (const p of data) {
         const arr = baseIdProductMap.get(p.base_id) || [];
-        arr.push({ id: p.id, name: p.name, baseId: p.base_id, currentStock: (p as any)[stockField] });
+        arr.push({
+          id: p.id,
+          name: p.name,
+          baseId: p.base_id,
+          fullBarcode: p.full_barcode,
+          currentStock: (p as any)[stockField],
+        });
         baseIdProductMap.set(p.base_id, arr);
       }
       if (data.length < DB_PAGE) break;
@@ -356,6 +398,52 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[INIT-STOCK] Aggregated stable keys: ${aggregated.size}, DB products loaded: ${dbOffset > 0 ? dbOffset : baseIdProductMap.size}`);
+
+    const importRunId = crypto.randomUUID();
+    const debugRowsToInsert: Record<string, unknown>[] = [];
+    const mismatchRowsForResponse: Array<Record<string, unknown>> = [];
+
+    const pushDebugRow = (args: {
+      stableKey: string;
+      sourceRow: ImportDebugSourceRow;
+      productId: string | null;
+      matchedDbBarcode: string | null;
+      extractedPriceFromDb: number | null;
+      mismatchFlag: boolean;
+      mismatchReason: string | null;
+    }) => {
+      debugRowsToInsert.push({
+        run_id: importRunId,
+        import_source: "initial-stock-load",
+        location_id: inventoryLocationId,
+        location_name: locationLabel,
+        stable_key: args.stableKey,
+        product_id: args.productId,
+        source_line_number: args.sourceRow.sourceLineNumber,
+        source_barcode: args.sourceRow.sourceBarcode,
+        matched_db_barcode: args.matchedDbBarcode,
+        extracted_price_from_source: args.sourceRow.extractedPriceFromSource,
+        extracted_price_from_db: args.extractedPriceFromDb,
+        quantity: args.sourceRow.quantity,
+        line_value: args.sourceRow.lineValue,
+        mismatch_flag: args.mismatchFlag,
+        mismatch_reason: args.mismatchReason,
+      });
+
+      if (args.mismatchFlag && mismatchRowsForResponse.length < 20) {
+        mismatchRowsForResponse.push({
+          source_barcode: args.sourceRow.sourceBarcode,
+          matched_db_barcode: args.matchedDbBarcode,
+          extracted_price_from_source: args.sourceRow.extractedPriceFromSource,
+          extracted_price_from_db: args.extractedPriceFromDb,
+          quantity: args.sourceRow.quantity,
+          line_value: args.sourceRow.lineValue,
+          mismatch_flag: args.mismatchFlag,
+          mismatch_reason: args.mismatchReason,
+          stable_key: args.stableKey,
+        });
+      }
+    };
 
     const results: EntryResult[] = [...parseErrors];
     const zeroQuantityDebugRows: ZeroQuantityDebugRow[] = [];
@@ -376,6 +464,20 @@ Deno.serve(async (req) => {
           status: "error",
           reason,
         });
+
+        for (const sourceRow of item.sourceRows) {
+          const mismatchFlag = sourceRow.quantity > 0 && ((sourceRow.extractedPriceFromSource ?? 0) <= 0 || sourceRow.lineValue <= 0);
+          const mismatchReason = mismatchFlag ? `${reason}; extracted_price_from_source_missing_or_zero` : reason;
+          pushDebugRow({
+            stableKey,
+            sourceRow,
+            productId: null,
+            matchedDbBarcode: null,
+            extractedPriceFromDb: null,
+            mismatchFlag,
+            mismatchReason,
+          });
+        }
 
         if (item.totalQty === 0) {
           const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
@@ -406,6 +508,18 @@ Deno.serve(async (req) => {
           reason,
         });
 
+        for (const sourceRow of item.sourceRows) {
+          pushDebugRow({
+            stableKey,
+            sourceRow,
+            productId: null,
+            matchedDbBarcode: null,
+            extractedPriceFromDb: null,
+            mismatchFlag: true,
+            mismatchReason: reason,
+          });
+        }
+
         if (item.totalQty === 0) {
           const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
           zeroQuantityDebugRows.push({
@@ -425,6 +539,36 @@ Deno.serve(async (req) => {
 
       // Exactly one match — safe to import
       const product = matches[0];
+      const matchedDbBarcode = product.fullBarcode;
+      const extractedPriceFromDb = extractPriceFromBarcode(matchedDbBarcode);
+
+      for (const sourceRow of item.sourceRows) {
+        const mismatchReasons: string[] = [];
+        if (sourceRow.quantity > 0 && (sourceRow.extractedPriceFromSource ?? 0) <= 0) {
+          mismatchReasons.push("extracted_price_from_source_missing_or_zero");
+        }
+        if (sourceRow.quantity > 0 && sourceRow.lineValue <= 0) {
+          mismatchReasons.push("line_value_zero_or_negative");
+        }
+        if (
+          sourceRow.quantity > 0 &&
+          sourceRow.extractedPriceFromSource !== null &&
+          extractedPriceFromDb !== null &&
+          sourceRow.extractedPriceFromSource !== extractedPriceFromDb
+        ) {
+          mismatchReasons.push("source_vs_db_price_mismatch");
+        }
+
+        pushDebugRow({
+          stableKey,
+          sourceRow,
+          productId: product.id,
+          matchedDbBarcode,
+          extractedPriceFromDb,
+          mismatchFlag: mismatchReasons.length > 0,
+          mismatchReason: mismatchReasons.length > 0 ? mismatchReasons.join(";") : null,
+        });
+      }
 
       if (item.totalQty === 0) {
         const sourceRows = zeroQtyByStableKey.get(stableKey) || [];
@@ -494,6 +638,30 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
+    let debugRowsWritten = 0;
+    if (debugRowsToInsert.length > 0) {
+      if (inventoryLocationId) {
+        await supabase
+          .from("inventory_import_debug_lines")
+          .delete()
+          .eq("import_source", "initial-stock-load")
+          .eq("location_id", inventoryLocationId);
+      }
+
+      const chunkSize = 500;
+      for (let i = 0; i < debugRowsToInsert.length; i += chunkSize) {
+        const chunk = debugRowsToInsert.slice(i, i + chunkSize);
+        const { error: debugInsertError } = await supabase
+          .from("inventory_import_debug_lines")
+          .insert(chunk);
+        if (debugInsertError) {
+          console.error("[INIT-STOCK-DEBUG] Failed to persist debug rows:", debugInsertError.message);
+        } else {
+          debugRowsWritten += chunk.length;
+        }
+      }
+    }
+
     const unmatchedRows = results.filter((r) => r.status === "error" && r.reason?.includes("Nicio potrivire"));
     const totalValue = Array.from(aggregated.values()).reduce((s, a) => s + a.totalValue, 0);
 
@@ -511,12 +679,15 @@ Deno.serve(async (req) => {
           zeroQuantityRowsDetected: zeroQuantitySourceRows.length,
           zeroQuantityRowsAssigned: zeroQuantityDebugRows.length,
           inventoryStockWriteErrors,
+          debugRowsWritten,
           writeMode: "replace_existing_quantity",
-          writesTo: [stockField, "inventory_stock.quantity"],
+          writesTo: [stockField, "inventory_stock.quantity", "inventory_stock.stock_value", "inventory_import_debug_lines"],
           totalValue,
           location: locationLabel,
         },
         debug: {
+          runId: importRunId,
+          mismatchRows: mismatchRowsForResponse,
           zeroQuantityRows: zeroQuantityDebugRows,
           note: "Raw quantity values captured before DB write for all rows that result in assigned quantity 0",
         },
