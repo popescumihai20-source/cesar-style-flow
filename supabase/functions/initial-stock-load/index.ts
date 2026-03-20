@@ -542,8 +542,24 @@ Deno.serve(async (req) => {
       const product = matches[0];
       const matchedDbBarcode = product.fullBarcode;
       const extractedPriceFromDb = extractPriceFromBarcode(matchedDbBarcode);
+      const isPriceOverridden = product.sellingPrice > 0;
+      const overridePrice = isPriceOverridden ? product.sellingPrice : null;
+
+      // Recalculate totalValue using override price if available
+      let finalTotalValue = item.totalValue; // default: sum of barcode_price * qty per line
+      if (isPriceOverridden) {
+        finalTotalValue = overridePrice! * item.totalQty;
+        console.log(`[INIT-STOCK-OVERRIDE] stable_key=${stableKey} using selling_price=${overridePrice} × qty=${item.totalQty} = ${finalTotalValue} (was ${item.totalValue} from barcode prices)`);
+      }
+      // Replace totalValue with the override-aware value
+      item.totalValue = finalTotalValue;
 
       for (const sourceRow of item.sourceRows) {
+        // Recalculate lineValue with override if applicable
+        if (isPriceOverridden) {
+          sourceRow.lineValue = overridePrice! * sourceRow.quantity;
+        }
+
         const mismatchReasons: string[] = [];
         if (sourceRow.quantity > 0 && (sourceRow.extractedPriceFromSource ?? 0) <= 0) {
           mismatchReasons.push("extracted_price_from_source_missing_or_zero");
