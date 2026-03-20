@@ -372,13 +372,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch ALL active products from DB to build base_id lookup
-    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; fullBarcode: string | null; currentStock: number }[]>();
+    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; fullBarcode: string | null; currentStock: number; sellingPrice: number }[]>();
     let dbOffset = 0;
     const DB_PAGE = 1000;
     while (true) {
       const { data } = await supabase
         .from("products")
-        .select(`id, base_id, name, full_barcode, ${stockField}`)
+        .select(`id, base_id, name, full_barcode, selling_price, ${stockField}`)
         .eq("active", true)
         .range(dbOffset, dbOffset + DB_PAGE - 1);
       if (!data || data.length === 0) break;
@@ -390,6 +390,7 @@ Deno.serve(async (req) => {
           baseId: p.base_id,
           fullBarcode: p.full_barcode,
           currentStock: (p as any)[stockField],
+          sellingPrice: Number(p.selling_price || 0),
         });
         baseIdProductMap.set(p.base_id, arr);
       }
