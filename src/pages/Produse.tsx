@@ -349,10 +349,13 @@ export default function Produse() {
   };
 
   const exportStockValueDebug = () => {
-    const headers = ["Barcode", "ExtractedPrice", "Quantity", "LineValue", "Status", "ProductName"];
+    const headers = ["Barcode", "BarcodePrice", "OverridePrice", "FinalPriceUsed", "IsPriceOverridden", "Quantity", "LineValue", "Status", "ProductName"];
     const rows = stockValueDebug.rows.map((row) => [
       row.barcode,
       row.extractedPrice ?? "",
+      row.overridePrice ?? "",
+      row.finalPriceUsed ?? "",
+      row.isPriceOverridden,
       row.quantity,
       row.lineValue,
       row.status,
