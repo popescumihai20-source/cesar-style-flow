@@ -115,11 +115,27 @@ export default function Produse() {
   const { data: inventoryStockData = [] } = useQuery({
     queryKey: ["inventory-stock-values"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inventory_stock")
-        .select("product_id, location_id, quantity, stock_value, inventory_locations(type)");
-      if (error) throw error;
-      return data || [];
+      const pageSize = 1000;
+      let from = 0;
+      const allRows: any[] = [];
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("inventory_stock")
+          .select("product_id, location_id, quantity, stock_value, inventory_locations(type)")
+          .order("id")
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allRows.push(...data);
+
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allRows;
     },
   });
 
@@ -152,7 +168,7 @@ export default function Produse() {
       const quantityDepozit = stockEntry?.depozitQty ?? Number((p as any).stock_depozit || 0);
       const quantityMagazin = stockEntry?.magazinQty ?? Number(p.stock_general || 0);
       const quantity = quantityDepozit + quantityMagazin;
-      // All products are "included" — stock_value=0 just means zero value, not invalid
+      const extractedPrice = extractPriceFromBarcode(p);
       const isValidBarcode = /^\d{17}$/.test(barcode);
       const status = isValidBarcode ? "included" : "skipped_invalid_barcode";
 
@@ -164,7 +180,7 @@ export default function Produse() {
         id: p.id,
         name: p.name,
         barcode,
-        extractedPrice: null,
+        extractedPrice,
         quantity,
         lineValue,
         status,
