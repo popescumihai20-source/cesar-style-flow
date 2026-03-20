@@ -31,6 +31,9 @@ type StockValueDebugRow = {
   name: string;
   barcode: string;
   extractedPrice: number | null;
+  overridePrice: number | null;
+  finalPriceUsed: number | null;
+  isPriceOverridden: boolean;
   quantity: number;
   lineValue: number;
   status: "included" | "skipped_invalid_barcode";
