@@ -372,13 +372,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch ALL active products from DB to build base_id lookup
-    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; fullBarcode: string | null; currentStock: number }[]>();
+    const baseIdProductMap = new Map<string, { id: string; name: string; baseId: string; fullBarcode: string | null; currentStock: number; sellingPrice: number }[]>();
     let dbOffset = 0;
     const DB_PAGE = 1000;
     while (true) {
       const { data } = await supabase
         .from("products")
-        .select(`id, base_id, name, full_barcode, ${stockField}`)
+        .select(`id, base_id, name, full_barcode, selling_price, ${stockField}`)
         .eq("active", true)
         .range(dbOffset, dbOffset + DB_PAGE - 1);
       if (!data || data.length === 0) break;
@@ -390,6 +390,7 @@ Deno.serve(async (req) => {
           baseId: p.base_id,
           fullBarcode: p.full_barcode,
           currentStock: (p as any)[stockField],
+          sellingPrice: Number(p.selling_price || 0),
         });
         baseIdProductMap.set(p.base_id, arr);
       }
@@ -541,8 +542,24 @@ Deno.serve(async (req) => {
       const product = matches[0];
       const matchedDbBarcode = product.fullBarcode;
       const extractedPriceFromDb = extractPriceFromBarcode(matchedDbBarcode);
+      const isPriceOverridden = product.sellingPrice > 0;
+      const overridePrice = isPriceOverridden ? product.sellingPrice : null;
+
+      // Recalculate totalValue using override price if available
+      let finalTotalValue = item.totalValue; // default: sum of barcode_price * qty per line
+      if (isPriceOverridden) {
+        finalTotalValue = overridePrice! * item.totalQty;
+        console.log(`[INIT-STOCK-OVERRIDE] stable_key=${stableKey} using selling_price=${overridePrice} × qty=${item.totalQty} = ${finalTotalValue} (was ${item.totalValue} from barcode prices)`);
+      }
+      // Replace totalValue with the override-aware value
+      item.totalValue = finalTotalValue;
 
       for (const sourceRow of item.sourceRows) {
+        // Recalculate lineValue with override if applicable
+        if (isPriceOverridden) {
+          sourceRow.lineValue = overridePrice! * sourceRow.quantity;
+        }
+
         const mismatchReasons: string[] = [];
         if (sourceRow.quantity > 0 && (sourceRow.extractedPriceFromSource ?? 0) <= 0) {
           mismatchReasons.push("extracted_price_from_source_missing_or_zero");

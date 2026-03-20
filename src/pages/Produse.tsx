@@ -31,6 +31,9 @@ type StockValueDebugRow = {
   name: string;
   barcode: string;
   extractedPrice: number | null;
+  overridePrice: number | null;
+  finalPriceUsed: number | null;
+  isPriceOverridden: boolean;
   quantity: number;
   lineValue: number;
   status: "included" | "skipped_invalid_barcode";
@@ -164,11 +167,14 @@ export default function Produse() {
       const depozitValue = stockEntry?.depozitValue ?? 0;
       const magazinValue = stockEntry?.magazinValue ?? 0;
       const lineValue = depozitValue + magazinValue;
-      // Use inventory_stock qty if available, otherwise fall back to products legacy columns
       const quantityDepozit = stockEntry?.depozitQty ?? Number((p as any).stock_depozit || 0);
       const quantityMagazin = stockEntry?.magazinQty ?? Number(p.stock_general || 0);
       const quantity = quantityDepozit + quantityMagazin;
       const extractedPrice = extractPriceFromBarcode(p);
+      const sellingPrice = Number(p.selling_price || 0);
+      const overridePrice = sellingPrice > 0 ? sellingPrice : null;
+      const isPriceOverridden = overridePrice !== null && overridePrice !== extractedPrice;
+      const finalPriceUsed = overridePrice ?? extractedPrice;
       const isValidBarcode = /^\d{17}$/.test(barcode);
       const status = isValidBarcode ? "included" : "skipped_invalid_barcode";
 
@@ -181,6 +187,9 @@ export default function Produse() {
         name: p.name,
         barcode,
         extractedPrice,
+        overridePrice,
+        finalPriceUsed,
+        isPriceOverridden,
         quantity,
         lineValue,
         status,
@@ -340,10 +349,13 @@ export default function Produse() {
   };
 
   const exportStockValueDebug = () => {
-    const headers = ["Barcode", "ExtractedPrice", "Quantity", "LineValue", "Status", "ProductName"];
+    const headers = ["Barcode", "BarcodePrice", "OverridePrice", "FinalPriceUsed", "IsPriceOverridden", "Quantity", "LineValue", "Status", "ProductName"];
     const rows = stockValueDebug.rows.map((row) => [
       row.barcode,
       row.extractedPrice ?? "",
+      row.overridePrice ?? "",
+      row.finalPriceUsed ?? "",
+      row.isPriceOverridden,
       row.quantity,
       row.lineValue,
       row.status,

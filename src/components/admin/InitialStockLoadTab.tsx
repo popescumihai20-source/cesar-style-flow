@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, PackageCheck, AlertTriangle, Warehouse, Store, Search, FileDown } from "lucide-react";
 import * as XLSX from "xlsx";
+import PriceOverrideImportTab from "./PriceOverrideImportTab";
 
 interface EntryResult {
   barcode: string;
@@ -513,6 +514,9 @@ export default function InitialStockLoadTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Price Override Import */}
+      <PriceOverrideImportTab />
     </div>
   );
 }
