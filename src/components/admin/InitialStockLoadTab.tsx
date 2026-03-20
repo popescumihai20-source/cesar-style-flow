@@ -514,6 +514,9 @@ export default function InitialStockLoadTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Price Override Import */}
+      <PriceOverrideImportTab />
     </div>
   );
 }
