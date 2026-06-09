@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   hasRole: (role: AppRole) => boolean;
   signOut: () => Promise<void>;
+  signInWithCard: (cardCode: string, pinLogin?: string) => Promise<{ employee: { id: string; name: string; role: string } }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -75,8 +76,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles([]);
   };
 
+  const signInWithCard = async (cardCode: string, pinLogin?: string) => {
+    if (!/^\d{7}$/.test(cardCode)) {
+      throw new Error("Cod card invalid — trebuie exact 7 cifre");
+    }
+
+    const { data: employee, error: empErr } = await supabase
+      .from("employees")
+      .select("id, name, role, employee_card_code, pin_login, active")
+      .eq("employee_card_code", cardCode)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (empErr) throw empErr;
+    if (!employee) throw new Error("Card angajat invalid sau inactiv");
+
+    if (pinLogin && employee.pin_login !== pinLogin) {
+      throw new Error("PIN incorect");
+    }
+
+    const email = `emp_${cardCode}@cesars.internal`;
+    const password = `cesars_pos_${cardCode}_secure`;
+
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInErr) throw new Error(signInErr.message || "Autentificare eșuată");
+
+    return { employee: { id: employee.id, name: employee.name, role: employee.role } };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, roles, loading, hasRole, signOut }}>
+    <AuthContext.Provider value={{ user, session, roles, loading, hasRole, signOut, signInWithCard }}>
       {children}
     </AuthContext.Provider>
   );
