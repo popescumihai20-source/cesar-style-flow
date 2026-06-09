@@ -12,7 +12,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, signInWithCard } = useAuth();
 
   useEffect(() => {
     if (user) navigate("/pos", { replace: true });
@@ -26,7 +26,7 @@ export default function Login() {
       // Find first active employee with this role
       const { data: employee, error: empErr } = await supabase
         .from("employees")
-        .select("employee_card_code, pin_login, name")
+        .select("employee_card_code, name")
         .eq("role", role)
         .eq("active", true)
         .limit(1)
@@ -39,31 +39,15 @@ export default function Login() {
         return;
       }
 
-      // Call auth edge function
-      const { data, error: fnErr } = await supabase.functions.invoke("auth-by-card", {
-        body: { card_code: employee.employee_card_code, pin_login: employee.pin_login },
+      // Direct sign-in via Supabase (no Edge Function)
+      const { employee: emp } = await signInWithCard(employee.employee_card_code);
+
+      toast({
+        title: `Bun venit, ${emp.name}!`,
+        description: `Rol: ${role}`,
       });
 
-      if (fnErr) throw fnErr;
-      if (data?.error) throw new Error(data.error);
-
-      if (data?.session) {
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-
-        toast({
-          title: `Bun venit, ${data.employee?.name || employee.name}!`,
-          description: `Rol: ${role}`,
-        });
-
-        if (role === "admin") {
-          navigate("/admin", { replace: true });
-        } else {
-          navigate("/pos", { replace: true });
-        }
-      }
+      navigate(role === "admin" ? "/admin" : "/pos", { replace: true });
     } catch (err: any) {
       setError(err.message || "Eroare la autentificare");
     } finally {
