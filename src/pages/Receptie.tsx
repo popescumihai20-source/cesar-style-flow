@@ -294,6 +294,31 @@ export default function Receptie() {
       </div>
 
       <Card>
+        <CardContent className="p-3 flex flex-wrap items-end gap-3">
+          <div className="min-w-[260px]">
+            <Label className="text-xs">Locație destinație recepție *</Label>
+            <Select value={destinationLocationId} onValueChange={setDestinationLocationId}>
+              <SelectTrigger className="h-9 mt-1">
+                <SelectValue placeholder="Alege unde intră marfa..." />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    📍 {l.name} ({l.type === "warehouse" ? "Depozit" : "Magazin"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {destinationLocationId && (
+            <p className="text-xs text-muted-foreground">
+              Stocul va fi adăugat în <strong>{locations.find((l: any) => l.id === destinationLocationId)?.name}</strong>.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <div className="overflow-auto">
           <Table>
             <TableHeader>
