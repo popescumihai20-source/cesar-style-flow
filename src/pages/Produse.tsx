@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon } from "lucide-react";
+import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -125,7 +125,7 @@ export default function Produse() {
       while (true) {
         const { data, error } = await supabase
           .from("inventory_stock")
-          .select("product_id, location_id, quantity, stock_value, inventory_locations(type)")
+          .select("product_id, location_id, quantity, stock_value, inventory_locations(type, name, code)")
           .order("id")
           .range(from, from + pageSize - 1);
 
@@ -141,6 +141,37 @@ export default function Produse() {
       return allRows;
     },
   });
+
+  // Active locations (drives the per-location tabs)
+  const { data: locations = [] } = useQuery({
+    queryKey: ["inventory-locations-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inventory_locations" as any)
+        .select("id, name, type, code")
+        .eq("active", true)
+        .order("type", { ascending: true })
+        .order("name");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  // Build a map: location_id -> Map<product_id, { qty, value }>
+  const stockByLocation = useMemo(() => {
+    const map = new Map<string, Map<string, { qty: number; value: number }>>();
+    for (const row of inventoryStockData) {
+      const locId = (row as any).location_id as string;
+      const productId = (row as any).product_id as string;
+      if (!map.has(locId)) map.set(locId, new Map());
+      const inner = map.get(locId)!;
+      const existing = inner.get(productId) || { qty: 0, value: 0 };
+      existing.qty += Number((row as any).quantity || 0);
+      existing.value += Number((row as any).stock_value || 0);
+      inner.set(productId, existing);
+    }
+    return map;
+  }, [inventoryStockData]);
 
   const stockValueDebug = useMemo(() => {
     // Build a map: product_id → { depozitValue, magazinValue, depozitQty, magazinQty }
@@ -388,29 +419,43 @@ export default function Produse() {
         </div>
       </div>
 
-      <Tabs defaultValue="magazin" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="magazin" className="gap-1.5">
-            <Store className="h-3.5 w-3.5" />Magazin Ferdinand
-            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.stock_general ?? 0), 0)} buc
-            </Badge>
-            <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {stockValueDebug.magazinTotal.toLocaleString("ro-RO")} lei
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="depozit" className="gap-1.5">
-            <Warehouse className="h-3.5 w-3.5" />Depozit
-            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">
-              {products.reduce((s, p) => s + (p.stock_depozit ?? 0), 0)} buc
-            </Badge>
-            <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">
-              {stockValueDebug.depozitTotal.toLocaleString("ro-RO")} lei
-            </Badge>
-          </TabsTrigger>
+      <Tabs defaultValue={locations[0]?.id ?? "none"} className="space-y-4">
+        <TabsList className="flex-wrap h-auto">
+          {locations.map((loc: any) => {
+            const inner = stockByLocation.get(loc.id);
+            let totalQty = 0;
+            let totalValue = 0;
+            if (inner) {
+              for (const v of inner.values()) {
+                totalQty += v.qty;
+                totalValue += v.value;
+              }
+            }
+            const Icon = loc.type === "warehouse" ? Warehouse : Store;
+            return (
+              <TabsTrigger key={loc.id} value={loc.id} className="gap-1.5">
+                <Icon className="h-3.5 w-3.5" />{loc.name}
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">{totalQty} buc</Badge>
+                <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">{totalValue.toLocaleString("ro-RO")} lei</Badge>
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
-        <TabsContent value="magazin" className="space-y-4">
+        {locations.map((loc: any) => {
+          const inner = stockByLocation.get(loc.id) || new Map<string, { qty: number; value: number }>();
+          const locProducts = products.filter((p: any) => {
+            const qty = inner.get(p.id)?.qty ?? 0;
+            if (qty <= 0) return false;
+            if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
+            if (categoryFilter !== "all" && resolveCategory(p) !== categoryFilter) return false;
+            if (seasonFilter !== "all" && p.seasonal_tag !== seasonFilter) return false;
+            if (activeFilter === "active" && !p.active) return false;
+            if (activeFilter === "inactive" && p.active) return false;
+            return true;
+          });
+          return (
+        <TabsContent key={loc.id} value={loc.id} className="space-y-4">
           <Card>
             <CardContent className="flex flex-wrap items-center gap-3 p-3">
               <div className="relative flex-1 min-w-[200px]">
@@ -453,15 +498,16 @@ export default function Produse() {
                     <TableHead>Categorie</TableHead>
                     <TableHead>Brand</TableHead>
                     <TableHead className="text-right">Preț</TableHead>
-                    <TableHead className="text-right">Stoc</TableHead>
+                    <TableHead className="text-right">Stoc loc.</TableHead>
                     <TableHead>Sezon</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Acțiuni</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(p => {
-                    const isZeroStock = p.stock_general <= 0;
+                  {locProducts.map(p => {
+                    const locQty = inner.get(p.id)?.qty ?? 0;
+                    const isZeroStock = locQty <= 0;
                     return (
                     <TableRow key={p.id} className={isZeroStock ? "opacity-60" : ""}>
                       <TableCell>
@@ -494,7 +540,7 @@ export default function Produse() {
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
                       <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
                       <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p)?.toFixed(2) ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
+                      <TableCell className="text-right font-mono font-bold">{locQty}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge>
@@ -512,75 +558,16 @@ export default function Produse() {
                     </TableRow>
                     );
                   })}
-                  {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Niciun produs găsit</TableCell></TableRow>
+                  {locProducts.length === 0 && (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Niciun produs în această locație</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
           </Card>
         </TabsContent>
-
-        <TabsContent value="depozit" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Stoc Depozit</CardTitle>
-                <div className="relative min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Caută produs..." className="pl-9 h-9" />
-                </div>
-              </div>
-            </CardHeader>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cod</TableHead>
-                    <TableHead>Nume</TableHead>
-                    <TableHead>Categorie</TableHead>
-                    <TableHead className="text-right">Stoc Depozit</TableHead>
-                    <TableHead className="text-right">Stoc Magazin</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.filter((p: any) => {
-                    if ((p.stock_depozit ?? 0) <= 0) return false;
-                    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search)) return false;
-                    return p.active;
-                  }).map((p: any) => {
-                    const isZeroDepozit = (p.stock_depozit ?? 0) <= 0;
-                    return (
-                    <TableRow key={p.id} className={isZeroDepozit ? "opacity-60" : ""}>
-                      <TableCell className={`font-mono text-xs ${isZeroDepozit ? "text-muted-foreground" : ""}`}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-pointer underline decoration-dotted">{(p as any).full_barcode || p.base_id}</span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="font-mono text-sm">
-                            {(p as any).full_barcode || p.base_id}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className={`font-medium ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.name}</TableCell>
-                      <TableCell className={isZeroDepozit ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${isZeroDepozit ? "text-muted-foreground" : ""}`}>{p.stock_depozit ?? 0}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">{p.stock_general}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          {p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}
-                          {isZeroDepozit && <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border px-1.5 py-0">Stoc 0</Badge>}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </TabsContent>
+          );
+        })}
       </Tabs>
 
       <Card>

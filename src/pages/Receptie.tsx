@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Truck, Plus, Trash2, CheckCircle, Barcode } from "lucide-react";
 import { ExcelImport, type ExcelRow } from "@/components/receptie/ExcelImport";
 import { NewProductModal, type GeneratedProduct } from "@/components/receptie/NewProductModal";
@@ -59,12 +60,26 @@ export default function Receptie() {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNewProductModal, setShowNewProductModal] = useState(false);
+  const [destinationLocationId, setDestinationLocationId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { activeEntries: articolEntries } = useArticolDictionary();
   const { activeProducatori } = useProducatorDictionary();
   const { activeColors } = useColorDictionary();
+
+  const { data: locations = [] } = useQuery({
+    queryKey: ["inventory-locations-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inventory_locations" as any)
+        .select("id, name, type, code")
+        .eq("active", true)
+        .order("name");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
 
   const addRow = useCallback(() => {
     setRows(prev => [...prev, {
@@ -132,6 +147,16 @@ export default function Receptie() {
       toast({ title: "Selectează articol, model și producător pentru cel puțin un rând", variant: "destructive" });
       return;
     }
+    if (!destinationLocationId) {
+      toast({ title: "Selectează locația de destinație pentru recepție", variant: "destructive" });
+      return;
+    }
+    const destLoc = locations.find((l: any) => l.id === destinationLocationId);
+    if (!destLoc) {
+      toast({ title: "Locație invalidă", variant: "destructive" });
+      return;
+    }
+    const destIsWarehouse = destLoc.type === "warehouse";
     setIsSubmitting(true);
     try {
       const { data: receipt, error: receiptError } = await supabase
@@ -147,7 +172,7 @@ export default function Receptie() {
 
         const { data: existing } = await supabase
           .from("products")
-          .select("id, stock_general")
+          .select("id, stock_general, stock_depozit")
           .eq("base_id", baseId)
           .maybeSingle();
 
@@ -155,7 +180,8 @@ export default function Receptie() {
 
         if (existing) {
           await supabase.from("products").update({
-            stock_general: existing.stock_general + row.quantity,
+            stock_general: destIsWarehouse ? (existing.stock_general ?? 0) : (existing.stock_general ?? 0) + row.quantity,
+            stock_depozit: destIsWarehouse ? ((existing as any).stock_depozit ?? 0) + row.quantity : ((existing as any).stock_depozit ?? 0),
             cost_price: row.costPrice,
             selling_price: row.sellingPrice,
             last_received_at: new Date().toISOString(),
@@ -174,7 +200,8 @@ export default function Receptie() {
               name: `${artName} ${colorName} ${prodName}`,
               cost_price: row.costPrice,
               selling_price: row.sellingPrice,
-              stock_general: row.quantity,
+              stock_general: destIsWarehouse ? 0 : row.quantity,
+              stock_depozit: destIsWarehouse ? row.quantity : 0,
               active: true,
               last_received_at: new Date().toISOString(),
             })
@@ -191,23 +218,22 @@ export default function Receptie() {
           cost_price: row.costPrice,
         });
 
-        // Also update inventory_stock for the store location
-        const { data: storeLoc } = await supabase
-          .from("inventory_locations" as any)
-          .select("id, name")
-          .eq("type", "store")
-          .limit(1)
-          .single();
-        if (storeLoc) {
-          const { error: stockErr } = await supabase
-            .from("inventory_stock" as any)
-            .upsert({
-              product_id: productId,
-              location_id: (storeLoc as any).id,
-              quantity: (existing ? existing.stock_general : 0) + row.quantity,
-            }, { onConflict: "product_id,location_id" });
-          if (stockErr) console.error("inventory_stock sync error:", stockErr);
-        }
+        // Update inventory_stock for the SELECTED destination location
+        const { data: currentStock } = await supabase
+          .from("inventory_stock" as any)
+          .select("quantity")
+          .eq("product_id", productId)
+          .eq("location_id", destinationLocationId)
+          .maybeSingle();
+        const newQty = ((currentStock as any)?.quantity ?? 0) + row.quantity;
+        const { error: stockErr } = await supabase
+          .from("inventory_stock" as any)
+          .upsert({
+            product_id: productId,
+            location_id: destinationLocationId,
+            quantity: newQty,
+          }, { onConflict: "product_id,location_id" });
+        if (stockErr) console.error("inventory_stock sync error:", stockErr);
 
         // Generate barcode for audit
         const genBarcode = generateBarcode(
@@ -226,13 +252,15 @@ export default function Receptie() {
           base_id: baseId,
           product_name: productName,
           quantity: row.quantity,
-          location_name: (storeLoc as any)?.name || "Magazin",
+          location_name: destLoc.name,
         });
         console.log(`[Recepție Audit] barcode=${genBarcode}, qty=${row.quantity}, product=${productName}`);
       }
 
       queryClient.invalidateQueries({ queryKey: ["products-pos"] });
       queryClient.invalidateQueries({ queryKey: ["products-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["store-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-stock-values"] });
       toast({ title: "✅ Recepție salvată", description: `${validRows.length} articole recepționate` });
       setRows([]);
       setNotes("");
@@ -264,6 +292,31 @@ export default function Receptie() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="p-3 flex flex-wrap items-end gap-3">
+          <div className="min-w-[260px]">
+            <Label className="text-xs">Locație destinație recepție *</Label>
+            <Select value={destinationLocationId} onValueChange={setDestinationLocationId}>
+              <SelectTrigger className="h-9 mt-1">
+                <SelectValue placeholder="Alege unde intră marfa..." />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    📍 {l.name} ({l.type === "warehouse" ? "Depozit" : "Magazin"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {destinationLocationId && (
+            <p className="text-xs text-muted-foreground">
+              Stocul va fi adăugat în <strong>{locations.find((l: any) => l.id === destinationLocationId)?.name}</strong>.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <div className="overflow-auto">
