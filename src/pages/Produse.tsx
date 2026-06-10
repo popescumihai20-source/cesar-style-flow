@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon } from "lucide-react";
+import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -125,7 +125,7 @@ export default function Produse() {
       while (true) {
         const { data, error } = await supabase
           .from("inventory_stock")
-          .select("product_id, location_id, quantity, stock_value, inventory_locations(type)")
+          .select("product_id, location_id, quantity, stock_value, inventory_locations(type, name, code)")
           .order("id")
           .range(from, from + pageSize - 1);
 
@@ -141,6 +141,37 @@ export default function Produse() {
       return allRows;
     },
   });
+
+  // Active locations (drives the per-location tabs)
+  const { data: locations = [] } = useQuery({
+    queryKey: ["inventory-locations-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inventory_locations" as any)
+        .select("id, name, type, code")
+        .eq("active", true)
+        .order("type", { ascending: true })
+        .order("name");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  // Build a map: location_id -> Map<product_id, { qty, value }>
+  const stockByLocation = useMemo(() => {
+    const map = new Map<string, Map<string, { qty: number; value: number }>>();
+    for (const row of inventoryStockData) {
+      const locId = (row as any).location_id as string;
+      const productId = (row as any).product_id as string;
+      if (!map.has(locId)) map.set(locId, new Map());
+      const inner = map.get(locId)!;
+      const existing = inner.get(productId) || { qty: 0, value: 0 };
+      existing.qty += Number((row as any).quantity || 0);
+      existing.value += Number((row as any).stock_value || 0);
+      inner.set(productId, existing);
+    }
+    return map;
+  }, [inventoryStockData]);
 
   const stockValueDebug = useMemo(() => {
     // Build a map: product_id → { depozitValue, magazinValue, depozitQty, magazinQty }
