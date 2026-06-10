@@ -1242,6 +1242,31 @@ export default function POS() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* POS Location picker */}
+      <Dialog open={showLocationPicker} onOpenChange={setShowLocationPicker}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alege locația POS</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {POS_LOCATION_CODES.map((code) => (
+              <Button
+                key={code}
+                variant={posLocationCode === code ? "default" : "outline"}
+                className="w-full h-14 justify-start text-base"
+                onClick={() => changePosLocation(code)}
+              >
+                📍 {POS_LOCATION_LABELS[code]}
+                {posLocationCode === code && <span className="ml-auto text-xs">(activă)</span>}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Vânzările vor scădea stocul din locația selectată. Schimbarea golește coșul curent în acest browser.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
