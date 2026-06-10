@@ -23,6 +23,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+const POS_LOCATION_STORAGE_KEY = "pos.location_code";
+const POS_LOCATION_CODES = ["FERDINAND", "TEI"] as const;
+type PosLocationCode = typeof POS_LOCATION_CODES[number];
+const POS_LOCATION_LABELS: Record<PosLocationCode, string> = {
+  FERDINAND: "Cesar's Ferdinand",
+  TEI: "Cesar's Tei",
+};
+
 export default function POS() {
   const queryClient = useQueryClient();
   const {
@@ -73,6 +81,21 @@ export default function POS() {
   } | null>(null);
   const [pinError, setPinError] = useState("");
 
+  // POS location (which store this terminal sells from)
+  const [posLocationCode, setPosLocationCode] = useState<PosLocationCode>(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(POS_LOCATION_STORAGE_KEY) : null;
+    return (saved === "TEI" || saved === "FERDINAND") ? saved : "FERDINAND";
+  });
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  const changePosLocation = useCallback((code: PosLocationCode) => {
+    setPosLocationCode(code);
+    try { window.localStorage.setItem(POS_LOCATION_STORAGE_KEY, code); } catch {}
+    queryClient.invalidateQueries({ queryKey: ["store-location"] });
+    queryClient.invalidateQueries({ queryKey: ["store-stock"] });
+    setShowLocationPicker(false);
+  }, [queryClient]);
+
   // Fetch products for search
   const { data: products = [] } = useQuery({
     queryKey: ["products-pos"],
@@ -90,12 +113,12 @@ export default function POS() {
 
   // Fetch store location
   const { data: storeLocation, isLoading: isStoreLocationLoading } = useQuery({
-    queryKey: ["store-location"],
+    queryKey: ["store-location", posLocationCode],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inventory_locations" as any)
         .select("*")
-        .eq("type", "store")
+        .eq("code", posLocationCode)
         .eq("active", true)
         .limit(1)
         .single();
