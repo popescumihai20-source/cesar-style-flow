@@ -813,6 +813,15 @@ export default function POS() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLocationPicker(true)}
+              className="h-9"
+              title="Schimbă locația POS"
+            >
+              📍 {POS_LOCATION_LABELS[posLocationCode]}
+            </Button>
             {mode === "casier" && !returnMode && (
               <Badge variant="outline" className="border-primary text-primary text-xs">
                 CASIER ACTIV
