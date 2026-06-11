@@ -229,8 +229,8 @@ export default function POS() {
 
     // If PUBLIC mode, try to find employee card
     if (mode === "public") {
-      // Validate as 7-digit employee card
-      if (/^\d{7}$/.test(trimmed)) {
+      // Validate as employee card (4-10 digits)
+      if (/^\d{4,10}$/.test(trimmed)) {
         const { data: employee } = await supabase
           .from("employees")
           .select("*")

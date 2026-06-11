@@ -105,8 +105,8 @@ export default function ScoatereStoc() {
 
   const handleCard = async () => {
     const trimmed = cardInput.trim();
-    if (!/^\d{7}$/.test(trimmed)) {
-      toast({ title: "Cod card invalid", description: "Trebuie exact 7 cifre numerice", variant: "destructive" });
+    if (!/^\d{4,10}$/.test(trimmed)) {
+      toast({ title: "Cod card invalid", description: "Trebuie între 4 și 10 cifre numerice", variant: "destructive" });
       setCardInput("");
       return;
     }
@@ -287,12 +287,12 @@ export default function ScoatereStoc() {
           <CardContent>
             <Input
               value={cardInput}
-              onChange={e => setCardInput(e.target.value.replace(/\D/g, "").slice(0, 7))}
+              onChange={e => setCardInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
               onKeyDown={e => e.key === "Enter" && handleCard()}
-              placeholder="Cod card angajat (7 cifre)..."
+              placeholder="Cod card angajat (4-10 cifre)..."
               className="h-14 text-lg font-mono"
               autoFocus
-              maxLength={7}
+              maxLength={10}
             />
           </CardContent>
         </Card>

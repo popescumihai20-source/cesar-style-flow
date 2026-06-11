@@ -77,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithCard = async (cardCode: string, pinLogin?: string) => {
-    if (!/^\d{7}$/.test(cardCode)) {
-      throw new Error("Cod card invalid — trebuie exact 7 cifre");
+    if (!/^\d{4,10}$/.test(cardCode)) {
+      throw new Error("Cod card invalid — trebuie între 4 și 10 cifre");
     }
 
     const { data: employee, error: empErr } = await supabase
