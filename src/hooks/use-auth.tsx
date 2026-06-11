@@ -1,12 +1,19 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
 
 type AppRole = "admin" | "casier" | "depozit";
 
+interface EmployeeUser {
+  id: string;
+  email: string;
+  employee_id: string;
+  name: string;
+  card_code: string;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: EmployeeUser | null;
+  session: { user: EmployeeUser } | null;
   roles: AppRole[];
   loading: boolean;
   hasRole: (role: AppRole) => boolean;
@@ -16,63 +23,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_KEY = "cesars_employee_session";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<EmployeeUser | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          // Fetch roles - use setTimeout to avoid Supabase deadlock
-          setTimeout(async () => {
-            const { data } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id);
-            setRoles((data || []).map((r) => r.role));
-            setLoading(false);
-          }, 0);
-        } else {
-          setRoles([]);
-          setLoading(false);
-        }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { user: EmployeeUser; roles: AppRole[] };
+        setUser(parsed.user);
+        setRoles(parsed.roles || []);
       }
-    );
-
-    // THEN check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", session.user.id)
-          .then(({ data }) => {
-            setRoles((data || []).map((r) => r.role));
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    } catch {
+      // ignore corrupted storage
+    }
+    setLoading(false);
   }, []);
 
   const hasRole = (role: AppRole) => roles.includes(role);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem(STORAGE_KEY);
     setUser(null);
-    setSession(null);
     setRoles([]);
   };
 
@@ -83,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: employee, error: empErr } = await supabase
       .from("employees")
-      .select("id, name, role, employee_card_code, pin_login, active")
+      .select("id, name, role, employee_card_code, pin_login, active, user_id")
       .eq("employee_card_code", cardCode)
       .eq("active", true)
       .maybeSingle();
@@ -95,17 +71,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("PIN incorect");
     }
 
-    const email = `emp_${cardCode}@cesars.internal`;
-    const password = `cesars_pos_${cardCode}_secure`;
+    const empUser: EmployeeUser = {
+      id: employee.user_id || employee.id,
+      email: `emp_${cardCode}@cesars.internal`,
+      employee_id: employee.id,
+      name: employee.name,
+      card_code: employee.employee_card_code,
+    };
 
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInErr) throw new Error(signInErr.message || "Autentificare eșuată");
+    const appRole: AppRole = employee.role === "admin" ? "admin" : "casier";
+    const nextRoles: AppRole[] = [appRole];
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user: empUser, roles: nextRoles }));
+    setUser(empUser);
+    setRoles(nextRoles);
 
     return { employee: { id: employee.id, name: employee.name, role: employee.role } };
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, roles, loading, hasRole, signOut, signInWithCard }}>
+    <AuthContext.Provider value={{ user, session: user ? { user } : null, roles, loading, hasRole, signOut, signInWithCard }}>
       {children}
     </AuthContext.Provider>
   );
