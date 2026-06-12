@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Settings, BarChart3, Package, Users, Monitor, Circle, FileDown, Receipt, AlertTriangle, Warehouse, UserCheck, BookOpen, Barcode, Lock, Eye, Ban, ClipboardList, Upload, ChevronDown, ArrowRightLeft, PackageCheck } from "lucide-react";
 import DepozitTab from "@/components/admin/DepozitTab";
 import EmployeesTab from "@/components/admin/EmployeesTab";
+import EmployeeStatsTab from "@/components/admin/EmployeeStatsTab";
 import DevicesTab from "@/components/admin/DevicesTab";
 import BulineTab from "@/components/admin/BulineTab";
 import ReportsTab from "@/components/admin/ReportsTab";
@@ -228,6 +229,7 @@ export default function Admin() {
             <TabsTrigger value="reports"><BarChart3 className="h-3 w-3 mr-1" />Rapoarte</TabsTrigger>
             <TabsTrigger value="stock">Stoc</TabsTrigger>
             <TabsTrigger value="employees">Angajați</TabsTrigger>
+            <TabsTrigger value="stats-angajati">Statistici Angajați</TabsTrigger>
             <TabsTrigger value="devices">Dispozitive</TabsTrigger>
             <TabsTrigger value="buline"><Circle className="h-3 w-3 mr-1" />Buline</TabsTrigger>
             <TabsTrigger value="customers"><UserCheck className="h-3 w-3 mr-1" />Clienți</TabsTrigger>
@@ -359,6 +361,7 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="employees"><EmployeesTab /></TabsContent>
+        <TabsContent value="stats-angajati"><EmployeeStatsTab /></TabsContent>
         <TabsContent value="devices"><DevicesTab /></TabsContent>
         <TabsContent value="buline"><BulineTab /></TabsContent>
         <TabsContent value="customers"><CustomersTab /></TabsContent>
