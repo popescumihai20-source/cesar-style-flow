@@ -406,7 +406,7 @@ export default function Produse() {
         <Button
           variant={selectedLocationId === "all" ? "default" : "outline"}
           size="lg"
-          className="h-14 px-6 text-base [&[data-variant=outline]]:border-stone-600 [&[data-variant=outline]]:text-stone-800 [&[data-vari
+          className="h-14 px-6 text-base"
           onClick={() => setSelectedLocationId("all")}
         >
           <MapPin className="h-5 w-5 mr-2" />
@@ -423,7 +423,7 @@ export default function Produse() {
               key={loc.id}
               variant={active ? "default" : "outline"}
               size="lg"
-              className="h-14 px-6 text-base [&[data-variant=outline]]:border-stone-600 [&[data-variant=outline]]:text-stone-800 [&[data-vari
+              className="h-14 px-6 text-base"
               onClick={() => setSelectedLocationId(loc.id)}
             >
               <Icon className="h-5 w-5 mr-2" />
