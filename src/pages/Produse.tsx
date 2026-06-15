@@ -1,7 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Product } from "@/types/pos";
 import { useProducatorDictionary } from "@/hooks/use-producator-dictionary";
@@ -9,14 +8,13 @@ import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ProductVariantsEditor } from "@/components/products/ProductVariantsEditor";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const CATEGORIES = ["Costume", "Sacouri", "Pantaloni", "Camasi", "Tricouri", "Pulovere", "Geci", "Paltoane", "Incaltaminte", "Veste", "Accesorii"];
 const SEASONS: Array<{ value: string; label: string }> = [
@@ -26,24 +24,8 @@ const SEASONS: Array<{ value: string; label: string }> = [
   { value: "tranzitie", label: "Tranziție" },
 ];
 
-type StockValueDebugRow = {
-  id: string;
-  name: string;
-  barcode: string;
-  extractedPrice: number | null;
-  overridePrice: number | null;
-  finalPriceUsed: number | null;
-  isPriceOverridden: boolean;
-  quantity: number;
-  lineValue: number;
-  status: "included" | "skipped_invalid_barcode";
-};
-
 export default function Produse() {
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [seasonFilter, setSeasonFilter] = useState<string>("all");
-  const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showVariants, setShowVariants] = useState<string | null>(null);
@@ -56,8 +38,6 @@ export default function Produse() {
   const queryClient = useQueryClient();
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
-
-  const [expectedTotalInput, setExpectedTotalInput] = useState("4083966");
 
   const extractPriceFromBarcode = (p: Product): number | null => {
     const barcode = String((p as any).full_barcode || "").trim();
@@ -173,87 +153,7 @@ export default function Produse() {
     return map;
   }, [inventoryStockData]);
 
-  const stockValueDebug = useMemo(() => {
-    // Build a map: product_id → { depozitValue, magazinValue, depozitQty, magazinQty }
-    const stockMap = new Map<string, { depozitValue: number; magazinValue: number; depozitQty: number; magazinQty: number }>();
-    for (const row of inventoryStockData) {
-      const locType = (row as any).inventory_locations?.type;
-      const entry = stockMap.get(row.product_id) || { depozitValue: 0, magazinValue: 0, depozitQty: 0, magazinQty: 0 };
-      if (locType === "warehouse") {
-        entry.depozitValue += Number(row.stock_value || 0);
-        entry.depozitQty += Number(row.quantity || 0);
-      } else if (locType === "store") {
-        entry.magazinValue += Number(row.stock_value || 0);
-        entry.magazinQty += Number(row.quantity || 0);
-      }
-      stockMap.set(row.product_id, entry);
-    }
-
-    let rowsSkipped = 0;
-    let depozitTotal = 0;
-    let magazinTotal = 0;
-    const rows: StockValueDebugRow[] = products.map((p) => {
-      const barcode = String((p as any).full_barcode || "").trim();
-      const stockEntry = stockMap.get(p.id);
-      const depozitValue = stockEntry?.depozitValue ?? 0;
-      const magazinValue = stockEntry?.magazinValue ?? 0;
-      const lineValue = depozitValue + magazinValue;
-      const quantityDepozit = stockEntry?.depozitQty ?? Number((p as any).stock_depozit || 0);
-      const quantityMagazin = stockEntry?.magazinQty ?? Number(p.stock_general || 0);
-      const quantity = quantityDepozit + quantityMagazin;
-      const extractedPrice = extractPriceFromBarcode(p);
-      const sellingPrice = Number(p.selling_price || 0);
-      const overridePrice = sellingPrice > 0 ? sellingPrice : null;
-      const isPriceOverridden = overridePrice !== null && overridePrice !== extractedPrice;
-      const finalPriceUsed = overridePrice ?? extractedPrice;
-      const isValidBarcode = /^\d{17}$/.test(barcode);
-      const status = isValidBarcode ? "included" : "skipped_invalid_barcode";
-
-      if (!isValidBarcode) rowsSkipped += 1;
-      magazinTotal += magazinValue;
-      depozitTotal += depozitValue;
-
-      return {
-        id: p.id,
-        name: p.name,
-        barcode,
-        extractedPrice,
-        overridePrice,
-        finalPriceUsed,
-        isPriceOverridden,
-        quantity,
-        lineValue,
-        status,
-      };
-    });
-
-    const totalComputed = depozitTotal + magazinTotal;
-    const expected = Number.parseInt(expectedTotalInput, 10);
-    const difference = Number.isNaN(expected) ? null : totalComputed - expected;
-
-    return {
-      rows,
-      rowsProcessed: rows.length,
-      rowsSkipped,
-      rowsIncluded: rows.length - rowsSkipped,
-      magazinTotal,
-      depozitTotal,
-      totalComputed,
-      expectedTotal: Number.isNaN(expected) ? null : expected,
-      difference,
-    };
-  }, [products, inventoryStockData, expectedTotalInput]);
-
-  const filtered = products.filter(p => {
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
-    if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
-    if (seasonFilter !== "all" && p.seasonal_tag !== seasonFilter) return false;
-    if (activeFilter === "active" && !p.active) return false;
-    if (activeFilter === "inactive" && p.active) return false;
-    // Magazin tab: only show products with stock in magazin
-    if (p.stock_general <= 0) return false;
-    return true;
-  });
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
 
   const uploadImages = async (productId: string): Promise<string[]> => {
     const urls: string[] = [];
@@ -372,280 +272,167 @@ export default function Produse() {
 
   const exportCSV = () => {
     const headers = ["Base ID", "Nume", "Categorie", "Brand", "Preț Vânzare", "Stoc", "Sezon", "Activ"];
-    const rows = filtered.map(p => [p.base_id, p.name, p.category, p.brand, p.selling_price, p.stock_general, p.seasonal_tag, p.active]);
+    const rows = products.map(p => [p.base_id, p.name, p.category, p.brand, p.selling_price, p.stock_general, p.seasonal_tag, p.active]);
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "produse.csv"; a.click();
   };
 
-  const exportStockValueDebug = () => {
-    const headers = ["Barcode", "BarcodePrice", "OverridePrice", "FinalPriceUsed", "IsPriceOverridden", "Quantity", "LineValue", "Status", "ProductName"];
-    const rows = stockValueDebug.rows.map((row) => [
-      row.barcode,
-      row.extractedPrice ?? "",
-      row.overridePrice ?? "",
-      row.finalPriceUsed ?? "",
-      row.isPriceOverridden,
-      row.quantity,
-      row.lineValue,
-      row.status,
-      row.name,
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "stock-value-debug.csv";
-    a.click();
-  };
+  const visibleProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (q) {
+        const fb = String((p as any).full_barcode || "").toLowerCase();
+        const hit =
+          p.name.toLowerCase().includes(q) ||
+          p.base_id.toLowerCase().includes(q) ||
+          fb.includes(q);
+        if (!hit) return false;
+      }
+      if (selectedLocationId !== "all") {
+        const qty = stockByLocation.get(selectedLocationId)?.get(p.id)?.qty ?? 0;
+        if (qty <= 0) return false;
+      } else {
+        // show only products with stock somewhere
+        let total = 0;
+        for (const m of stockByLocation.values()) total += m.get(p.id)?.qty ?? 0;
+        if (total <= 0) return false;
+      }
+      return true;
+    });
+  }, [products, search, selectedLocationId, stockByLocation]);
 
   return (
     <TooltipProvider>
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Package className="h-7 w-7 text-primary" />
+          <Package className="h-9 w-9 text-primary" />
           <div>
-            <h1 className="text-xl font-bold">Produse</h1>
-            <p className="text-xs text-muted-foreground">{products.length} produse în catalog</p>
+            <h1 className="text-3xl font-bold">Produse</h1>
+            <p className="text-base text-muted-foreground">{products.length} produse în catalog</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
-          <Button variant="outline" size="sm" onClick={exportStockValueDebug}>Debug CSV</Button>
-          <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" />Produs Nou</Button>
+          <Button variant="outline" onClick={exportCSV}>Export CSV</Button>
+          <Button onClick={openCreate}><Plus className="h-5 w-5 mr-2" />Produs Nou</Button>
         </div>
       </div>
 
-      <Tabs defaultValue={locations[0]?.id ?? "none"} className="space-y-4">
-        <TabsList className="flex-wrap h-auto">
-          {locations.map((loc: any) => {
-            const inner = stockByLocation.get(loc.id);
-            let totalQty = 0;
-            let totalValue = 0;
-            if (inner) {
-              for (const v of inner.values()) {
-                totalQty += v.qty;
-                totalValue += v.value;
-              }
-            }
-            const Icon = loc.type === "warehouse" ? Warehouse : Store;
-            return (
-              <TabsTrigger key={loc.id} value={loc.id} className="gap-1.5">
-                <Icon className="h-3.5 w-3.5" />{loc.name}
-                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono">{totalQty} buc</Badge>
-                <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 font-mono">{totalValue.toLocaleString("ro-RO")} lei</Badge>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+      {/* Big search bar */}
+      <div className="relative">
+        <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Caută după nume sau cod..."
+          className="h-16 pl-14 text-lg rounded-xl shadow-sm"
+        />
+      </div>
 
+      {/* Location filter buttons */}
+      <div className="flex flex-wrap gap-3">
+        <Button
+          variant={selectedLocationId === "all" ? "default" : "outline"}
+          size="lg"
+          className="h-14 px-6 text-base"
+          onClick={() => setSelectedLocationId("all")}
+        >
+          <MapPin className="h-5 w-5 mr-2" />
+          Toate locațiile
+        </Button>
         {locations.map((loc: any) => {
-          const inner = stockByLocation.get(loc.id) || new Map<string, { qty: number; value: number }>();
-          const locProducts = products.filter((p: any) => {
-            const qty = inner.get(p.id)?.qty ?? 0;
-            if (qty <= 0) return false;
-            if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.base_id.includes(search) && !(p as any).full_barcode?.includes(search)) return false;
-            if (categoryFilter !== "all" && resolveCategory(p) !== categoryFilter) return false;
-            if (seasonFilter !== "all" && p.seasonal_tag !== seasonFilter) return false;
-            if (activeFilter === "active" && !p.active) return false;
-            if (activeFilter === "inactive" && p.active) return false;
-            return true;
-          });
+          const Icon = loc.type === "warehouse" ? Warehouse : Store;
+          const inner = stockByLocation.get(loc.id);
+          let totalQty = 0;
+          if (inner) for (const v of inner.values()) totalQty += v.qty;
+          const active = selectedLocationId === loc.id;
           return (
-        <TabsContent key={loc.id} value={loc.id} className="space-y-4">
-          <Card>
-            <CardContent className="flex flex-wrap items-center gap-3 p-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Caută produs..." className="pl-9 h-9" />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Categorie" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toate categoriile</SelectItem>
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={seasonFilter} onValueChange={setSeasonFilter}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Sezon" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toate sezoanele</SelectItem>
-                  {SEASONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={activeFilter} onValueChange={setActiveFilter}>
-                <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toate</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>Cod</TableHead>
-                    <TableHead>Nume</TableHead>
-                    <TableHead>Categorie</TableHead>
-                    <TableHead>Brand</TableHead>
-                    <TableHead className="text-right">Preț</TableHead>
-                    <TableHead className="text-right">Stoc loc.</TableHead>
-                    <TableHead>Sezon</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Acțiuni</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {locProducts.map(p => {
-                    const locQty = inner.get(p.id)?.qty ?? 0;
-                    const isZeroStock = locQty <= 0;
-                    return (
-                    <TableRow key={p.id} className={isZeroStock ? "opacity-60" : ""}>
-                      <TableCell>
-                        {p.images && p.images.length > 0 ? (
-                          <img src={p.images[0]} alt={p.name} className="h-8 w-8 rounded object-cover" />
-                        ) : (
-                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                            <ImageIcon className="h-3 w-3 text-muted-foreground" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className={`font-mono text-xs ${isZeroStock ? "text-muted-foreground" : ""}`}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-pointer underline decoration-dotted">{(p as any).full_barcode || p.base_id}</span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="font-mono text-sm">
-                            {(p as any).full_barcode || p.base_id}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className={`font-medium ${isZeroStock ? "text-muted-foreground" : ""}`}>
-                        {p.name}
-                        {(() => {
-                          const prodCode = p.base_id?.substring(4, 6);
-                          const prodName = activeProducatori.find(pr => pr.code === prodCode)?.name;
-                          return prodName ? <span className="block text-[10px] text-muted-foreground font-normal">{prodName}</span> : null;
-                        })()}
-                      </TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveCategory(p)}</TableCell>
-                      <TableCell className={isZeroStock ? "text-muted-foreground" : ""}>{resolveBrand(p)}</TableCell>
-                      <TableCell className={`text-right font-mono ${isZeroStock ? "text-muted-foreground" : ""}`}>{extractPriceFromBarcode(p)?.toFixed(2) ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono font-bold">{locQty}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="secondary" className="text-xs">{p.seasonal_tag}</Badge>
-                          {isZeroStock && <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border px-1.5 py-0">Stoc 0</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell>{p.active ? <Badge className="bg-success/20 text-success text-xs">Activ</Badge> : <Badge variant="secondary" className="text-xs">Inactiv</Badge>}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowVariants(p.id)}><Eye className="h-3 w-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}><Edit className="h-3 w-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(p.id)}><Trash2 className="h-3 w-3" /></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                  {locProducts.length === 0 && (
-                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Niciun produs în această locație</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </TabsContent>
+            <Button
+              key={loc.id}
+              variant={active ? "default" : "outline"}
+              size="lg"
+              className="h-14 px-6 text-base"
+              onClick={() => setSelectedLocationId(loc.id)}
+            >
+              <Icon className="h-5 w-5 mr-2" />
+              {loc.name}
+              <Badge variant="secondary" className="ml-3 text-sm">{totalQty}</Badge>
+            </Button>
           );
         })}
-      </Tabs>
+      </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Debug calcul valoare stoc</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Rows procesate</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsProcessed}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Rows incluse</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsIncluded}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Rows sărite</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.rowsSkipped}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Total calculat</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.totalComputed.toLocaleString("ro-RO")}</p>
-            </div>
-          </div>
+      {/* Product cards */}
+      {isLoading ? (
+        <div className="text-center py-16 text-lg text-muted-foreground">Se încarcă...</div>
+      ) : visibleProducts.length === 0 ? (
+        <div className="text-center py-16 text-lg text-muted-foreground">Niciun produs găsit</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {visibleProducts.map((p) => {
+            const price = extractPriceFromBarcode(p);
+            const barcode = (p as any).full_barcode || p.base_id;
+            return (
+              <Card key={p.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <div className="flex">
+                  {/* Image */}
+                  <div className="w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center">
+                    {p.images && p.images.length > 0 ? (
+                      <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+                    )}
+                  </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-            <div>
-              <Label>Excel total așteptat</Label>
-              <Input
-                value={expectedTotalInput}
-                onChange={(e) => setExpectedTotalInput(e.target.value)}
-                className="font-mono"
-                placeholder="4092392"
-              />
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Diferență (calculat - Excel)</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.difference?.toLocaleString("ro-RO") ?? "—"}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Total Excel (input)</p>
-              <p className="font-mono text-lg font-semibold">{stockValueDebug.expectedTotal?.toLocaleString("ro-RO") ?? "—"}</p>
-            </div>
-          </div>
+                  {/* Info */}
+                  <CardContent className="flex-1 p-4 space-y-2 min-w-0">
+                    <div>
+                      <h3 className="text-lg font-bold leading-tight truncate" title={p.name}>{p.name}</h3>
+                      <p className="text-sm text-muted-foreground font-mono truncate" title={barcode}>{barcode}</p>
+                    </div>
 
-          <div className="overflow-auto max-h-80 rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead className="text-right">Preț extras</TableHead>
-                  <TableHead className="text-right">Cantitate</TableHead>
-                  <TableHead className="text-right">Valoare linie</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stockValueDebug.rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-mono text-xs">{row.barcode || "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{row.extractedPrice ?? "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{row.quantity}</TableCell>
-                    <TableCell className="text-right font-mono">{row.lineValue}</TableCell>
-                    <TableCell>
-                      {row.status === "included" ? (
-                        <Badge variant="secondary" className="text-xs">inclus</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">barcode invalid</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-2xl font-bold text-primary">
+                        {price !== null ? `${price} lei` : "—"}
+                      </span>
+                      <Badge variant="secondary" className="text-sm">{resolveCategory(p)}</Badge>
+                    </div>
+
+                    {/* Stock per location */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {locations.map((loc: any) => {
+                        const qty = stockByLocation.get(loc.id)?.get(p.id)?.qty ?? 0;
+                        const ok = qty > 0;
+                        return (
+                          <div
+                            key={loc.id}
+                            className={`flex items-center gap-1.5 text-sm px-2 py-1 rounded-md ${
+                              ok ? "bg-success/15 text-success" : "bg-destructive/10 text-destructive"
+                            }`}
+                            title={`${loc.name}: ${qty} buc`}
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${ok ? "bg-success" : "bg-destructive"}`} />
+                            <span className="font-medium">{loc.name}</span>
+                            <span className="font-bold">{qty}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex justify-end gap-1 pt-1">
+                      <Button variant="ghost" size="icon" onClick={() => setShowVariants(p.id)} title="Variante"><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)} title="Editează"><Edit className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(p.id)} title="Șterge"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </CardContent>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create/Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
