@@ -15,112 +15,99 @@
 
 @layer base {
   :root {
-    /* Fundal principal — crem cald */
-    --background: 38 35% 93%;
-    --foreground: 30 40% 12%;
+    --background: 38 28% 88%;
+    --foreground: 28 45% 10%;
 
-    /* Carduri — alb cald */
-    --card: 40 50% 98%;
-    --card-foreground: 30 40% 12%;
+    --card: 40 45% 96%;
+    --card-foreground: 28 45% 10%;
 
-    --popover: 40 50% 98%;
-    --popover-foreground: 30 40% 12%;
+    --popover: 40 45% 96%;
+    --popover-foreground: 28 45% 10%;
 
-    /* Primary — auriu Cesar's */
-    --primary: 38 46% 60%;
-    --primary-foreground: 30 40% 10%;
+    --primary: 34 50% 35%;
+    --primary-foreground: 40 45% 95%;
 
-    /* Secondary — bej mediu */
-    --secondary: 38 28% 86%;
-    --secondary-foreground: 30 40% 12%;
+    --secondary: 34 30% 75%;
+    --secondary-foreground: 28 50% 10%;
 
-    /* Muted */
-    --muted: 38 22% 88%;
-    --muted-foreground: 35 15% 45%;
+    --muted: 36 22% 82%;
+    --muted-foreground: 30 20% 38%;
 
-    /* Accent — auriu mai intens */
-    --accent: 38 55% 55%;
-    --accent-foreground: 30 40% 10%;
+    --accent: 34 50% 35%;
+    --accent-foreground: 40 45% 95%;
 
-    /* Destructive */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borduri */
-    --border: 36 22% 82%;
-    --input: 36 22% 82%;
-    --ring: 38 46% 60%;
+    --border: 33 30% 58%;
+    --input: 33 30% 58%;
+    --ring: 34 50% 35%;
 
     --radius: 0.5rem;
 
-    /* SIDEBAR — maro închis elegant */
-    --sidebar-background: 30 45% 13%;
-    --sidebar-foreground: 38 40% 88%;
-    --sidebar-primary: 38 46% 60%;
-    --sidebar-primary-foreground: 30 45% 10%;
-    --sidebar-accent: 30 38% 20%;
-    --sidebar-accent-foreground: 38 40% 88%;
-    --sidebar-border: 30 35% 20%;
-    --sidebar-ring: 38 46% 60%;
+    --sidebar-background: 28 48% 13%;
+    --sidebar-foreground: 38 45% 85%;
+    --sidebar-primary: 36 48% 58%;
+    --sidebar-primary-foreground: 28 48% 10%;
+    --sidebar-accent: 28 40% 22%;
+    --sidebar-accent-foreground: 38 55% 88%;
+    --sidebar-border: 28 38% 22%;
+    --sidebar-ring: 36 48% 58%;
 
-    /* Gold custom */
-    --gold: 38 46% 60%;
-    --gold-light: 40 55% 68%;
-    --gold-dark: 35 42% 45%;
+    --gold: 36 48% 58%;
+    --gold-light: 38 55% 66%;
+    --gold-dark: 33 44% 44%;
 
-    /* Success — verde oliv discret */
-    --success: 95 38% 35%;
+    --success: 100 42% 32%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
   }
 
-  /* Dark mode — păstrăm tonuri calde, nu albastru */
   .dark {
-    --background: 30 30% 10%;
-    --foreground: 38 35% 90%;
+    --background: 28 32% 10%;
+    --foreground: 38 38% 90%;
 
-    --card: 30 28% 14%;
-    --card-foreground: 38 35% 90%;
+    --card: 28 30% 14%;
+    --card-foreground: 38 38% 90%;
 
-    --popover: 30 28% 14%;
-    --popover-foreground: 38 35% 90%;
+    --popover: 28 30% 14%;
+    --popover-foreground: 38 38% 90%;
 
-    --primary: 38 46% 58%;
-    --primary-foreground: 30 40% 10%;
+    --primary: 36 48% 56%;
+    --primary-foreground: 28 35% 10%;
 
-    --secondary: 30 25% 20%;
-    --secondary-foreground: 38 35% 90%;
+    --secondary: 28 28% 20%;
+    --secondary-foreground: 38 38% 90%;
 
-    --muted: 30 22% 18%;
-    --muted-foreground: 35 12% 55%;
+    --muted: 28 24% 18%;
+    --muted-foreground: 33 15% 55%;
 
-    --accent: 38 50% 52%;
-    --accent-foreground: 30 40% 10%;
+    --accent: 36 50% 50%;
+    --accent-foreground: 28 35% 10%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 25% 22%;
-    --input: 30 25% 22%;
-    --ring: 38 46% 58%;
+    --border: 28 28% 30%;
+    --input: 28 28% 30%;
+    --ring: 36 48% 56%;
 
-    --sidebar-background: 30 40% 8%;
-    --sidebar-foreground: 38 35% 88%;
-    --sidebar-primary: 38 46% 58%;
-    --sidebar-primary-foreground: 30 40% 10%;
-    --sidebar-accent: 30 35% 16%;
-    --sidebar-accent-foreground: 38 35% 88%;
-    --sidebar-border: 30 30% 16%;
-    --sidebar-ring: 38 46% 58%;
+    --sidebar-background: 28 42% 8%;
+    --sidebar-foreground: 38 40% 86%;
+    --sidebar-primary: 36 48% 56%;
+    --sidebar-primary-foreground: 28 38% 10%;
+    --sidebar-accent: 28 36% 16%;
+    --sidebar-accent-foreground: 38 40% 86%;
+    --sidebar-border: 28 32% 16%;
+    --sidebar-ring: 36 48% 56%;
 
-    --gold: 38 46% 58%;
-    --gold-light: 40 52% 66%;
-    --gold-dark: 35 40% 44%;
+    --gold: 36 48% 56%;
+    --gold-light: 38 52% 64%;
+    --gold-dark: 33 42% 42%;
 
-    --success: 95 35% 40%;
+    --success: 100 40% 38%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -147,11 +134,4 @@
   .font-parkavenue {
     font-family: 'Park Avenue BT', 'Dancing Script', 'Playfair Display', cursive, serif;
   }
-}
-/* Fix butoane outline pe fundal crem */
-button[data-variant="outline"],
-[role="button"][data-variant="outline"] {
-  border-color: hsl(28 48% 25%) !important;
-  color: hsl(28 48% 15%) !important;
-  background-color: hsl(40 50% 94%) !important;
 }
