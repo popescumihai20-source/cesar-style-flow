@@ -122,6 +122,37 @@ export default function Produse() {
     },
   });
 
+  const { data: importDebugStockData = [] } = useQuery({
+    queryKey: ["inventory-import-stock-fallback"],
+    queryFn: async () => {
+      const pageSize = 1000;
+      let from = 0;
+      const allRows: any[] = [];
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("inventory_import_debug_lines" as any)
+          .select("product_id, location_id, location_name, quantity, line_value")
+          .not("product_id", "is", null)
+          .order("created_at", { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) {
+          console.warn("Stoc fallback indisponibil:", error.message);
+          return [];
+        }
+        if (!data || data.length === 0) break;
+
+        allRows.push(...data);
+
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allRows;
+    },
+  });
+
   // Active locations (drives the per-location tabs)
   const { data: locations = [] } = useQuery({
     queryKey: ["inventory-locations-active"],
@@ -140,18 +171,62 @@ export default function Produse() {
   // Build a map: location_id -> Map<product_id, { qty, value }>
   const stockByLocation = useMemo(() => {
     const map = new Map<string, Map<string, { qty: number; value: number }>>();
-    for (const row of inventoryStockData) {
-      const locId = (row as any).location_id as string;
-      const productId = (row as any).product_id as string;
-      if (!map.has(locId)) map.set(locId, new Map());
-      const inner = map.get(locId)!;
+    const activeLocations = locations as any[];
+    const resolveLocationId = (row: any) => {
+      const rowLocationId = String(row.location_id || "");
+      const rowLocationName = String(row.location_name || row.inventory_locations?.name || "").toLowerCase();
+      const exact = activeLocations.find((loc) => loc.id === rowLocationId);
+      if (exact) return exact.id;
+
+      const byName = activeLocations.find((loc) => String(loc.name || "").toLowerCase() === rowLocationName);
+      if (byName) return byName.id;
+
+      if (rowLocationName.includes("depozit")) {
+        return activeLocations.find((loc) => loc.type === "warehouse" || String(loc.code || "").toLowerCase().includes("depozit"))?.id || rowLocationId;
+      }
+
+      if (rowLocationName.includes("ferdinand")) {
+        return activeLocations.find((loc) => String(loc.name || "").toLowerCase().includes("ferdinand"))?.id || rowLocationId;
+      }
+
+      if (rowLocationName.includes("tei")) {
+        return activeLocations.find((loc) => String(loc.name || "").toLowerCase().includes("tei"))?.id || rowLocationId;
+      }
+
+      return rowLocationId;
+    };
+
+    const addStock = (locationId: string, productId: string, qty: number, value: number) => {
+      if (!locationId || !productId) return;
+      if (!map.has(locationId)) map.set(locationId, new Map());
+      const inner = map.get(locationId)!;
       const existing = inner.get(productId) || { qty: 0, value: 0 };
-      existing.qty += Number((row as any).quantity || 0);
-      existing.value += Number((row as any).stock_value || 0);
+      existing.qty += qty;
+      existing.value += value;
       inner.set(productId, existing);
+    };
+
+    for (const row of inventoryStockData) {
+      addStock(
+        resolveLocationId(row),
+        (row as any).product_id as string,
+        Number((row as any).quantity || 0),
+        Number((row as any).stock_value || 0),
+      );
+    }
+
+    if (inventoryStockData.length === 0) {
+      for (const row of importDebugStockData) {
+        addStock(
+          resolveLocationId(row),
+          (row as any).product_id as string,
+          Number((row as any).quantity || 0),
+          Number((row as any).line_value || 0),
+        );
+      }
     }
     return map;
-  }, [inventoryStockData]);
+  }, [importDebugStockData, inventoryStockData, locations]);
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
 
