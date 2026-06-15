@@ -148,3 +148,10 @@
     font-family: 'Park Avenue BT', 'Dancing Script', 'Playfair Display', cursive, serif;
   }
 }
+/* Fix butoane outline pe fundal crem */
+button[data-variant="outline"],
+[role="button"][data-variant="outline"] {
+  border-color: hsl(28 48% 25%) !important;
+  color: hsl(28 48% 15%) !important;
+  background-color: hsl(40 50% 94%) !important;
+}
