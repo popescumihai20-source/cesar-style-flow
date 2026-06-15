@@ -8,7 +8,7 @@ import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -26,9 +26,6 @@ const SEASONS: Array<{ value: string; label: string }> = [
 
 export default function Produse() {
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [seasonFilter, setSeasonFilter] = useState<string>("all");
-  const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showVariants, setShowVariants] = useState<string | null>(null);
@@ -41,8 +38,6 @@ export default function Produse() {
   const queryClient = useQueryClient();
   const { activeProducatori } = useProducatorDictionary();
   const { activeEntries: articolEntries } = useArticolDictionary();
-
-  const [expectedTotalInput, setExpectedTotalInput] = useState("4083966");
 
   const extractPriceFromBarcode = (p: Product): number | null => {
     const barcode = String((p as any).full_barcode || "").trim();
