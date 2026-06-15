@@ -293,11 +293,6 @@ export default function Produse() {
       if (selectedLocationId !== "all") {
         const qty = stockByLocation.get(selectedLocationId)?.get(p.id)?.qty ?? 0;
         if (qty <= 0) return false;
-      } else {
-        // show only products with stock somewhere
-        let total = 0;
-        for (const m of stockByLocation.values()) total += m.get(p.id)?.qty ?? 0;
-        if (total <= 0) return false;
       }
       return true;
     });
