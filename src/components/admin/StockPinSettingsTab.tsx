@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,40 +9,37 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff, Save } from "lucide-react";
 
-const WEAK_PINS = ["0000","1111","2222","3333","4444","5555","6666","7777","8888","9999","1234","4321"];
-
 export default function StockPinSettingsTab() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCasier, setShowCasier] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [casierPin, setCasierPin] = useState("");
   const [editing, setEditing] = useState(false);
+  const [adminAuthPin, setAdminAuthPin] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
 
   const { data: settings } = useQuery({
-    queryKey: ["system-settings-stock-pins"],
+    queryKey: ["system-settings-stock-pins", user?.employee_id, unlocked],
+    enabled: unlocked && !!user?.employee_id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("system_settings")
-        .select("key, value")
-        .in("key", ["stock_pin_admin", "stock_pin_casier"]);
+      const { data, error } = await supabase.functions.invoke("stock-pin-manage", {
+        body: { action: "get", admin_employee_id: user?.employee_id, admin_pin: adminAuthPin },
+      });
       if (error) throw error;
-      const map: Record<string, string> = {};
-      (data || []).forEach(r => { map[r.key] = r.value; });
-      return map;
+      if (!data?.pins) throw new Error(data?.error || "Neautorizat");
+      return data.pins as Record<string, string>;
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
-      if (!/^\d{4}$/.test(value)) throw new Error("PIN trebuie să fie exact 4 cifre");
-      if (WEAK_PINS.includes(value)) throw new Error("PIN prea slab");
-      
-      const { error } = await supabase
-        .from("system_settings")
-        .update({ value, updated_at: new Date().toISOString() })
-        .eq("key", key);
+      const { data, error } = await supabase.functions.invoke("stock-pin-manage", {
+        body: { action: "set", admin_employee_id: user?.employee_id, admin_pin: adminAuthPin, key, value },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["system-settings-stock-pins"] });
@@ -78,7 +76,7 @@ export default function StockPinSettingsTab() {
         <CardTitle className="text-base flex items-center gap-2">
           <Lock className="h-4 w-4" />PIN-uri Scoatere Stoc (Global)
         </CardTitle>
-        {!editing && (
+        {unlocked && !editing && (
           <Button variant="outline" size="sm" onClick={startEdit}>Editează</Button>
         )}
       </CardHeader>
@@ -87,6 +85,38 @@ export default function StockPinSettingsTab() {
           Aceste PIN-uri sunt globale pe rol. Toți angajații cu același rol folosesc același PIN pentru scoaterea din stoc.
         </p>
 
+        {!unlocked && (
+          <div className="space-y-2">
+            <Label>Confirmă PIN-ul tău de admin pentru a vedea PIN-urile de scoatere</Label>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={adminAuthPin}
+                onChange={e => setAdminAuthPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className="font-mono max-w-[120px]"
+                maxLength={4}
+                placeholder="PIN admin"
+              />
+              <Button
+                size="sm"
+                disabled={adminAuthPin.length !== 4}
+                onClick={async () => {
+                  const { data } = await supabase.functions.invoke("stock-pin-manage", {
+                    body: { action: "get", admin_employee_id: user?.employee_id, admin_pin: adminAuthPin },
+                  });
+                  if (data?.pins) {
+                    setUnlocked(true);
+                    queryClient.invalidateQueries({ queryKey: ["system-settings-stock-pins"] });
+                  } else {
+                    toast.error(data?.error || "PIN admin incorect");
+                  }
+                }}
+              >Deblochează</Button>
+            </div>
+          </div>
+        )}
+
+        {unlocked && (
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Admin PIN */}
           <div className="space-y-2">
@@ -134,8 +164,9 @@ export default function StockPinSettingsTab() {
             )}
           </div>
         </div>
+        )}
 
-        {editing && (
+        {unlocked && editing && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditing(false)}>Anulează</Button>
             <Button size="sm" onClick={saveAll} disabled={saveMutation.isPending}>
