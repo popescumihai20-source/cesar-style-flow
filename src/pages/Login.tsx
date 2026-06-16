@@ -23,24 +23,18 @@ export default function Login() {
     setLoading(role);
 
     try {
-      // Find first active employee with this role
-      const { data: employee, error: empErr } = await supabase
-        .from("employees")
-        .select("employee_card_code, name")
-        .eq("role", role)
-        .eq("active", true)
-        .limit(1)
-        .maybeSingle();
-
-      if (empErr) throw empErr;
-      if (!employee) {
-        setError(`Nu există angajat activ cu rolul "${role}"`);
+      // Quick-login: server-side lookup via edge function (no anon read on employees)
+      const { data: quick, error: quickErr } = await supabase.functions.invoke("employee-auth", {
+        body: { action: "quick_login", role },
+      });
+      if (quickErr) throw quickErr;
+      if (!quick?.employee) {
+        setError(quick?.error || `Nu există angajat activ cu rolul "${role}"`);
         setLoading(null);
         return;
       }
 
-      // Direct sign-in via Supabase (no Edge Function)
-      const { employee: emp } = await signInWithCard(employee.employee_card_code);
+      const { employee: emp } = await signInWithCard(quick.employee.card_code);
 
       toast({
         title: `Bun venit, ${emp.name}!`,

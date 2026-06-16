@@ -57,18 +57,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Cod card invalid — trebuie între 4 și 10 cifre");
     }
 
-    const { data: employee, error: empErr } = await supabase
-      .from("employees")
-      .select("id, name, role, employee_card_code, pin_login, active, user_id")
-      .eq("employee_card_code", cardCode)
-      .eq("active", true)
-      .maybeSingle();
+    const { data: lookup, error: lookupErr } = await supabase.functions.invoke("employee-auth", {
+      body: { action: "lookup_card", card_code: cardCode },
+    });
+    if (lookupErr) throw lookupErr;
+    if (!lookup?.employee) throw new Error(lookup?.error || "Card angajat invalid sau inactiv");
+    const employee = lookup.employee as { id: string; name: string; role: string; card_code: string; user_id: string | null };
 
-    if (empErr) throw empErr;
-    if (!employee) throw new Error("Card angajat invalid sau inactiv");
-
-    if (pinLogin && employee.pin_login !== pinLogin) {
-      throw new Error("PIN incorect");
+    if (pinLogin) {
+      const { data: verify, error: verifyErr } = await supabase.functions.invoke("employee-auth", {
+        body: { action: "verify_pin", employee_id: employee.id, pin: pinLogin },
+      });
+      if (verifyErr) throw verifyErr;
+      if (!verify?.valid) throw new Error("PIN incorect");
     }
 
     const empUser: EmployeeUser = {
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: `emp_${cardCode}@cesars.internal`,
       employee_id: employee.id,
       name: employee.name,
-      card_code: employee.employee_card_code,
+      card_code: employee.card_code,
     };
 
     const appRole: AppRole = employee.role === "admin" ? "admin" : "casier";

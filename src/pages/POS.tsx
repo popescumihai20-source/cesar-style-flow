@@ -231,16 +231,12 @@ export default function POS() {
     if (mode === "public") {
       // Validate as employee card (4-10 digits)
       if (/^\d{4,10}$/.test(trimmed)) {
-        const { data: employee } = await supabase
-          .from("employees")
-          .select("*")
-          .eq("employee_card_code", trimmed)
-          .eq("active", true)
-          .maybeSingle();
-
-        if (employee) {
-          // Show PIN login dialog instead of directly activating
-          setPendingEmployee(employee);
+        const { data: lookup } = await supabase.functions.invoke("employee-auth", {
+          body: { action: "lookup_card", card_code: trimmed },
+        });
+        if (lookup?.employee) {
+          // PIN-ul nu mai e expus clientului — îl verificăm server-side la submit
+          setPendingEmployee(lookup.employee);
           setShowPinLogin(true);
           setPinInput("");
           setPinError("");
@@ -375,25 +371,28 @@ export default function POS() {
     });
   };
 
-  // Handle PIN login submission
-  const handlePinLogin = () => {
+  // Handle PIN login submission — verificare server-side
+  const handlePinLogin = async () => {
     if (!pendingEmployee) return;
     if (!/^\d{4}$/.test(pinInput)) {
       setPinError("PIN-ul trebuie să aibă exact 4 cifre");
       setPinInput("");
       return;
     }
-    if (pinInput === pendingEmployee.pin_login) {
-      activateCashier(pendingEmployee.id, pendingEmployee.name);
-      toast({ title: `Sesiune casier: ${pendingEmployee.name}`, description: "Gata de vânzare!" });
-      setShowPinLogin(false);
-      setPendingEmployee(null);
-      setPinInput("");
-      setPinError("");
-    } else {
+    const { data: verify, error } = await supabase.functions.invoke("employee-auth", {
+      body: { action: "verify_pin", employee_id: pendingEmployee.id, pin: pinInput },
+    });
+    if (error || !verify?.valid) {
       setPinError("PIN incorect");
       setPinInput("");
+      return;
     }
+    activateCashier(pendingEmployee.id, pendingEmployee.name);
+    toast({ title: `Sesiune casier: ${pendingEmployee.name}`, description: "Gata de vânzare!" });
+    setShowPinLogin(false);
+    setPendingEmployee(null);
+    setPinInput("");
+    setPinError("");
   };
 
   // Add product from search

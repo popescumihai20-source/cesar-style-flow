@@ -1,90 +1,50 @@
+## Obiectiv
+Eliminarea politicilor RLS `Anon full access` și expunerea publică a PIN-urilor, mutând logica sensibilă în edge functions care validează server-side cu service role key. Frontend-ul rămâne anon, dar nu mai poate citi/scrie direct date sensibile.
 
+## Faza 1 — Edge functions pentru autentificare și PIN-uri (BREAKING-SAFE, livrată prima)
 
-# Sistemul Retail Cesar's — MVP Faza 1
+Edge functions noi:
+1. **`employee-login`** — primește `{card_code, pin?}`, validează în DB, întoarce `{id, name, role}` fără PIN-uri. Înlocuiește citirea directă din `employees` în `use-auth.tsx`.
+2. **`validate-stock-pin`** — primește `{role, pin}`, validează contra `system_settings`, întoarce `{valid: bool}`. Înlocuiește citirea PIN-urilor în `ScoatereStoc.tsx` și `StockPinSettingsTab.tsx`.
+3. **`get-stock-pins`** (doar admin) — întoarce PIN-urile pentru ecranul de setări (verifică server-side că apelantul e admin printr-un secret/token simplu).
 
-## POS + Produse + Gestiune Stoc
+Migrare DB (rulează după ce edge functions sunt în loc):
+- DROP policies: `Anon can read employees`, `Oricine poate citi angajati`, SELECT anon pe `system_settings`.
+- ADD policy `system_settings`: SELECT doar pentru `service_role` (sau bazat pe `has_role admin` când vom avea auth real).
+- ADD policy `employees`: SELECT doar `service_role`.
 
-### 1. Schema Bază de Date & Securitate (Lovable Cloud / Supabase)
-- **Tabel produse**: base_id, nume, categorie, brand, preț_vânzare, preț_achiziție, stoc_general, tag_sezon, activ, taguri, imagini, created_at
-- **Tabel variante**: base_id (FK), cod_variantă (2 cifre), etichetă (ex: "50", "M"), stoc_variantă
-- **Tabel utilizatori**: user_id, rol (admin/casier/depozit), cod_card_angajat, pin_scoatere, nume
-- **Tabel dispozitive**: cod_dispozitiv, nume, roluri_permise, activ
-- **Tabel vânzări**: id_intern (CES-XXXXXX), casier_id, status (pending_fiscal/fiscalizat), total, total_reducere, metoda_plată, nr_bon_fiscal, created_at
-- **Tabel articole vânzare**: vânzare_id (FK), base_id produs, cod_variantă, cantitate, preț_unitar, procent_reducere, total_linie
-- **Tabel scoateri stoc**: user_id, base_id produs, cod_variantă, cantitate, motiv, timestamp
-- **Tabel config coduri de bare**: versiune format, format_dată, lungimi active
-- **Tabel buline (comisioane)**: culoare, hex, valoare_comision_ron, activ
-- **Tabel atribuiri buline**: base_id produs, bulina_id
-- **Tabel log comisioane**: vânzare_id, casier_id, sumă_ron, bulina_id
-- **Tabel clienți** (doar structura): telefon (unic), nume, email, cod_card, puncte, nivel
-- **Tabel target-uri** (doar structura): tip, valoare, perioadă, activ
-- Politici RLS pe bază de rol
-- Validare cod dispozitiv
+## Faza 2 — Edge function pentru vânzări
 
-### 2. Motor Parsare Coduri de Bare
-- Parser configurabil: detectare automată 17 cifre (V1) vs 19 cifre (V2)
-- Extrage: base_id, cod_variantă (doar V2), dată_intrare, preț_etichetă
-- Format dată configurabil (ZZLLAA sau AALLZZ)
-- Returnează obiect structurat pentru POS și recepție
+4. **`create-sale`** — primește cart + payment + cashier_id, validează stocul, creează `sales` + `sale_items`, decrementează `inventory_stock`, opțional `commission_logs`. Înlocuiește toate insertările directe din `use-pos.ts` / POS.
+5. **`cancel-sale`** / **`create-return`** — restaurează stocul server-side.
 
-### 3. Administrare Produse (Admin)
-- Lista produse cu căutare, filtrare pe categorie/brand/sezon/status
-- Formular creare/editare produs: toate câmpurile, upload imagini în Supabase Storage
-- Gestionare variante: adaugă/editează/șterge mărimi per produs
-- Import în masă (CSV)
-- Generare coduri de bare pentru produse noi (V1 și V2)
-- Dezactivare automată produse fără recepție 6 luni
-- Preț achiziție vizibil doar pentru admin
+Migrare DB:
+- DROP policies `Anon full access sales`, `Anon full access sale_items`.
+- Policies rămân scrise pe `has_role` și `service_role`.
 
-### 4. Interfața POS
-- **Stare implicită**: mod PUBLIC — doar căutare + vizualizare (nume, preț, imagine, stoc)
-- **Input scanare card**: câmp focusat permanent; scanarea cardului de angajat activează sesiunea CASIER
-- **Coș**: scanare produs = adăugare instantanee; focus revine automat la input scanare
-- **Acțiuni articol**: ștergere articol (un click), reducere manuală (max 20%, slider sau input)
-- **Avertismente stoc**: indicator vizual subtil când stocul ajunge la 0 sau negativ — nu blochează vânzarea
-- **Buton Anulare Vânzare**: golește coșul, fără scriere în BD, revine la mod PUBLIC
-- **Finalizare în Sistem**: creează înregistrare vânzare (CES-XXXXXX), scade stocul, status = PENDING_FISCAL, revine la PUBLIC
-- **Buton bon fiscal**: placeholder — introducere manuală nr. bon fiscal deocamdată
-- **Auto-blocare**: 10 min inactivitate → revenire la mod PUBLIC
-- **Căutare produs**: căutare rapidă după nume (scenariu fără cod de bare)
-- **Selector metodă plată**: Numerar / Card / Mixt (sume împărțite)
-- **Articole cadou**: marchează articol ca gift → reducere 100%
+## Faza 3 — Stoc și produse
 
-### 5. Recepție Marfă
-- Grilă de introducere în masă (tip spreadsheet)
-- Câmpuri per rând: cod de bare (sau căutare produs), cantitate, preț_achiziție, defalcare pe variante
-- Acceptă coduri existente (V1/V2) sau selectare manuală produs
-- Reactivare automată produse inactive la recepție nouă
-- Generare coduri de bare noi dacă e necesar
-- Preț achiziție vizibil doar admin
+6. **`inventory-mutate`** — endpoint unificat pentru ajustări manuale (transfer, recepție outside-edge-functions, scoatere stoc) — sau extindem funcțiile existente.
+- `bulk-import-inventory`, `initial-stock-load` rulează deja pe service role → OK.
+- Mutațiile de produse (UPDATE/INSERT/DELETE) sunt deja în Admin → rămân, dar protejăm prin a elimina politica `Anon full access products` și a păstra doar policies role-based. **Notă:** asta înseamnă că UI-ul Admin trebuie să apeleze edge functions pentru a edita produse, sau primește un token de admin.
 
-### 6. Scoatere Stoc
-- Flux rapid: scanare card angajat → introducere PIN personal → scanare/căutare produs → cantitate → motiv opțional → confirmare
-- Înregistrat cu user_id, timestamp, produs, cantitate, motiv
-- NU apare ca vânzare
+Pentru a evita un refactor masiv în Admin imediat: înlocuiesc UPDATE/INSERT/DELETE de produse cu edge function `admin-product-mutate` care verifică un header `x-admin-token` egal cu un secret stocat.
 
-### 7. Dashboard Casier
-- Sumar zilnic simplu: total vânzări (RON), număr bonuri, comision acumulat
-- Fără detalii pe produs, fără profit
+## Faza 4 — Hardening rămas
+- `customers`: SELECT policy restrânsă (mutată în edge function `lookup-customer`).
+- SECURITY DEFINER functions: `REVOKE EXECUTE ... FROM anon` pentru `get_admin_kpis`, `has_role`, `confirm_transfer`, `generate_sale_internal_id` — apelate doar din edge functions sau roluri autentificate.
+- Storage `product-images`: înlocuiesc policy SELECT pe `(bucket_id = 'product-images')` cu una care permite GET pe obiect individual prin `publicUrl` (rămâne public read, dar listarea bucket-ului e blocată — Supabase deja blochează listarea când policy-ul nu acoperă `SELECT *`, doar accesul direct la URL funcționează).
+- Activez **Leaked Password Protection** (chiar dacă nu folosim email auth — pregătit pentru viitor).
 
-### 8. Dashboard Admin (de bază)
-- Prezentare vânzări: totaluri azi/săptămână/lună, număr bonuri
-- Prezentare stoc: total produse, alerte stoc scăzut
-- Gestionare angajați: adaugă/editează carduri, roluri, PIN-uri
-- Gestionare coduri dispozitive: înregistrare dispozitive, atribuire roluri
-- Setări buline/comisioane: definire culori, valori, atribuire la produse
-- Lista vânzări pending fiscal (placeholder reîncercare)
-- Export orice tabel în CSV
+## Detalii tehnice
+- Toate edge functions folosesc service role key (server-side) și CORS standard.
+- Frontend introduce un **session token simplu**: la login, edge function întoarce un `session_token` (UUID semnat HMAC cu secret server). Pentru endpoint-urile sensibile, frontend trimite tokenul în header `x-employee-session`. Edge function-ul îl verifică și extrage `employee_id` + `role`.
+- Token-ul e stocat în `localStorage` alături de `cesars_employee_session`.
 
-### 9. Interfață & Branding
-- Temă întunecată premium cu accente aurii (branding Cesar's placeholder)
-- Layout responsive: optimizat pentru POS desktop (butoane mari, prietenos scanare), pregătit pentru tabletă
-- Tranziții rapide, animații minime pentru viteză POS
-- Navigare sidebar: POS / Produse / Recepție / Scoatere Stoc / Admin
+## Risc & rollout
+- Implementarea se face în 4 faze, fiecare cu test în preview înainte de a rula migrațiile care „taie" politicile anon.
+- După fiecare fază, validez în preview că login + POS + stoc + admin funcționează.
+- Memory `Core` actualizată: politicile anon nu mai sunt acceptate; toate scrierile sensibile trec prin edge functions.
 
-### 10. Optimizări Performanță
-- Căutare indexată produse (index la nivel de bază de date)
-- Cache local produse pentru POS (React Query cu cache agresiv)
-- Actualizări optimiste stoc în coș
-- Liste produse paginate cu scroll virtual pentru cataloage mari
-
+## Ce livrez acum (dacă aprobi)
+Doar **Faza 1**: edge functions `employee-login`, `validate-stock-pin`, `get-stock-pins` + refactor `use-auth.tsx`, `ScoatereStoc.tsx`, `StockPinSettingsTab.tsx` + migrația care elimină anon SELECT pe `employees` și `system_settings`. Voi prezenta Fazele 2–4 după ce confirmi că Faza 1 merge.
