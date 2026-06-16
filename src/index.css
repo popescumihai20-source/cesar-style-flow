@@ -15,55 +15,55 @@
 
 @layer base {
   :root {
-    /* Bej/crem cu accent auriu/maro - tema retail moda masculina */
-    --background: 40 38% 87%;             /* #EDE4D0 */
-    --foreground: 30 50% 16%;             /* #3D2B14 */
+    /* Bej/crem cu accent auriu/maro - tema retail moda masculina REVIZUIT */
+    --background: 41 45% 87%;             /* #EDE4D0 */
+    --foreground: 30 70% 10%;             /* #2C1A08 */
 
     --card: 40 55% 96%;                   /* #FAF6EE */
-    --card-foreground: 30 50% 16%;
+    --card-foreground: 30 70% 10%;        /* #2C1A08 */
 
-    --popover: 40 55% 96%;
-    --popover-foreground: 30 50% 16%;
+    --popover: 40 55% 96%;                /* #FAF6EE */
+    --popover-foreground: 30 70% 10%;     /* #2C1A08 */
 
-    --primary: 30 50% 16%;                /* #3D2B14 maro inchis */
-    --primary-foreground: 38 55% 80%;     /* #E8D5B0 crem */
+    --primary: 30 70% 10%;                /* #2C1A08 maro inchis */
+    --primary-foreground: 40 55% 80%;     /* #E8D5B0 crem */
 
-    --secondary: 38 55% 80%;              /* #E8D5B0 */
-    --secondary-foreground: 30 50% 16%;
+    --secondary: 33 42% 71%;              /* #D4B896 bej auriu */
+    --secondary-foreground: 30 70% 10%;   /* #2C1A08 */
 
-    --muted: 42 40% 89%;                  /* #F0E8D5 */
-    --muted-foreground: 30 25% 30%;
+    --muted: 41 45% 87%;                  /* #EDE4D0 */
+    --muted-foreground: 33 24% 44%;       /* #8B7355 */
 
-    --accent: 38 47% 61%;                 /* #C9A96E auriu */
-    --accent-foreground: 30 50% 16%;
+    --accent: 33 42% 71%;                 /* #D4B896 */
+    --accent-foreground: 30 70% 10%;      /* #2C1A08 */
 
     --destructive: 0 63% 34%;             /* #8B2020 */
-    --destructive-foreground: 38 55% 90%;
+    --destructive-foreground: 40 55% 90%;
 
-    --border: 35 27% 50%;                 /* #A08860 */
-    --input: 35 27% 50%;
-    --ring: 38 47% 61%;
+    --border: 35 36% 64%;                 /* #C4A882 */
+    --input: 43 75% 31%;                  /* #8B6914 */
+    --ring: 39 46% 61%;                   /* #C9A96E */
 
     --radius: 0.5rem;
 
-    --sidebar-background: 28 65% 10%;     /* #2C1A08 */
-    --sidebar-foreground: 38 55% 80%;     /* #E8D5B0 */
-    --sidebar-primary: 38 47% 61%;        /* #C9A96E auriu */
-    --sidebar-primary-foreground: 28 65% 10%;
-    --sidebar-accent: 30 50% 16%;         /* #3D2B14 item activ */
-    --sidebar-accent-foreground: 38 55% 80%;
-    --sidebar-border: 30 50% 16%;
-    --sidebar-ring: 38 47% 61%;
+    --sidebar-background: 30 70% 10%;     /* #2C1A08 */
+    --sidebar-foreground: 40 55% 80%;     /* #E8D5B0 */
+    --sidebar-primary: 39 46% 61%;        /* #C9A96E auriu */
+    --sidebar-primary-foreground: 30 70% 10%;
+    --sidebar-accent: 34 51% 16%;         /* #3D2B14 item activ */
+    --sidebar-accent-foreground: 40 55% 80%;
+    --sidebar-border: 34 51% 16%;
+    --sidebar-ring: 39 46% 61%;
 
-    --gold: 38 47% 61%;                   /* #C9A96E */
+    --gold: 39 46% 61%;                   /* #C9A96E */
     --gold-light: 38 55% 72%;
     --gold-dark: 35 40% 45%;
 
     --success: 120 40% 30%;               /* #2D6A2D */
-    --success-foreground: 38 55% 90%;
+    --success-foreground: 40 55% 90%;
 
     --warning: 38 80% 50%;
-    --warning-foreground: 28 65% 10%;
+    --warning-foreground: 30 70% 10%;
   }
 
   .dark {
