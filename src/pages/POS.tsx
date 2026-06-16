@@ -231,16 +231,12 @@ export default function POS() {
     if (mode === "public") {
       // Validate as employee card (4-10 digits)
       if (/^\d{4,10}$/.test(trimmed)) {
-        const { data: employee } = await supabase
-          .from("employees")
-          .select("*")
-          .eq("employee_card_code", trimmed)
-          .eq("active", true)
-          .maybeSingle();
-
-        if (employee) {
-          // Show PIN login dialog instead of directly activating
-          setPendingEmployee(employee);
+        const { data: lookup } = await supabase.functions.invoke("employee-auth", {
+          body: { action: "lookup_card", card_code: trimmed },
+        });
+        if (lookup?.employee) {
+          // PIN-ul nu mai e expus clientului — îl verificăm server-side la submit
+          setPendingEmployee(lookup.employee);
           setShowPinLogin(true);
           setPinInput("");
           setPinError("");
