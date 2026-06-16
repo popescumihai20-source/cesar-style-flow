@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, Store, Warehouse, Upload, X, Image as ImageIcon, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -230,6 +230,14 @@ export default function Produse() {
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
 
+  const PAGE_SIZE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Reset paginarea când se schimbă căutarea sau locația
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, selectedLocationId]);
+
   const uploadImages = async (productId: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of imageFiles) {
@@ -373,6 +381,11 @@ export default function Produse() {
     });
   }, [products, search, selectedLocationId, stockByLocation]);
 
+  const paginatedProducts = useMemo(
+    () => visibleProducts.slice(0, visibleCount),
+    [visibleProducts, visibleCount]
+  );
+
   return (
     <TooltipProvider>
     <div className="space-y-6">
@@ -441,7 +454,7 @@ export default function Produse() {
         <div className="text-center py-16 text-lg text-muted-foreground">Niciun produs găsit</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleProducts.map((p) => {
+          {paginatedProducts.map((p) => {
             const price = extractPriceFromBarcode(p);
             const barcode = (p as any).full_barcode || p.base_id;
             return (
@@ -501,6 +514,21 @@ export default function Produse() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {!isLoading && visibleCount < visibleProducts.length && (
+        <div className="flex flex-col items-center gap-2 pt-4">
+          <p className="text-sm text-muted-foreground">
+            Afișate {paginatedProducts.length} din {visibleProducts.length} produse
+          </p>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          >
+            Încarcă încă {Math.min(PAGE_SIZE, visibleProducts.length - visibleCount)} produse
+          </Button>
         </div>
       )}
 

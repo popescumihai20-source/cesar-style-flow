@@ -54,7 +54,10 @@ export default function EmployeesTab() {
   const { data: employees = [] } = useQuery({
     queryKey: ["admin-employees"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("employees").select("*").order("name");
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, name, role, employee_card_code, active, user_id, created_at, updated_at")
+        .order("name");
       if (error) throw error;
       return data;
     },
