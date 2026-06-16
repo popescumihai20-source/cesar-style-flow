@@ -70,6 +70,20 @@ export default function ScoatereStoc() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: stockPins } = useQuery({
+    queryKey: ["system-settings-stock-pins"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("system_settings")
+        .select("key, value")
+        .in("key", ["stock_pin_admin", "stock_pin_casier"]);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data || []).forEach(r => { map[r.key] = r.value; });
+      return map;
+    },
+    staleTime: 60 * 1000,
+  });
 
   const filteredProducts = searchQuery.length >= 2
     ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.base_id.includes(searchQuery))
@@ -96,11 +110,14 @@ export default function ScoatereStoc() {
       setCardInput("");
       return;
     }
-    const { data: lookup } = await supabase.functions.invoke("employee-auth", {
-      body: { action: "lookup_card", card_code: trimmed },
-    });
-    if (lookup?.employee) {
-      setEmployee(lookup.employee);
+    const { data: emp } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("employee_card_code", trimmed)
+      .eq("active", true)
+      .maybeSingle();
+    if (emp) {
+      setEmployee(emp);
       setStep("pin_login");
     } else {
       toast({ title: "Date invalide", variant: "destructive" });
@@ -108,17 +125,13 @@ export default function ScoatereStoc() {
     setCardInput("");
   };
 
-  const handlePinLogin = async () => {
+  const handlePinLogin = () => {
     if (!/^\d{4}$/.test(pinLoginInput)) {
       toast({ title: "PIN invalid", description: "Trebuie exact 4 cifre", variant: "destructive" });
       setPinLoginInput("");
       return;
     }
-    if (!employee) return;
-    const { data: verify } = await supabase.functions.invoke("employee-auth", {
-      body: { action: "verify_pin", employee_id: (employee as any).id, pin: pinLoginInput },
-    });
-    if (verify?.valid) {
+    if (employee && pinLoginInput === (employee as any).pin_login) {
       setStep("product");
     } else {
       toast({ title: "Date invalide", variant: "destructive" });
@@ -180,8 +193,8 @@ export default function ScoatereStoc() {
     setPinError("");
   };
 
-  const handlePinStock = async () => {
-    if (!employee) return;
+  const handlePinStock = () => {
+    if (!employee || !stockPins) return;
     setPinError("");
 
     if (!/^\d{4}$/.test(pinStockInput)) {
@@ -198,11 +211,9 @@ export default function ScoatereStoc() {
     }
 
     const role = (employee as any).role || "casier";
-    const { data: verify } = await supabase.functions.invoke("stock-pin-manage", {
-      body: { action: "verify", role, pin: pinStockInput },
-    });
+    const expectedPin = role === "admin" ? stockPins.stock_pin_admin : stockPins.stock_pin_casier;
 
-    if (verify?.valid) {
+    if (pinStockInput === expectedPin) {
       clearStockLockout(employee.id);
       setStep("confirm");
     } else {
