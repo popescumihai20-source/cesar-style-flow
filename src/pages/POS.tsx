@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
+import { useAuth } from "@/hooks/use-auth";
 import { useInventoryLock } from "@/hooks/use-inventory-lock";
 import { Product } from "@/types/pos";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,9 @@ const POS_LOCATION_LABELS: Record<PosLocationCode, string> = {
 
 export default function POS() {
   const queryClient = useQueryClient();
+  // TEMPORAR: dezactivează autentificarea prin card de angajat la POS (pentru simulare vânzări)
+  const BYPASS_EMPLOYEE_CARD = true;
+  const { user } = useAuth();
   const {
     mode, cart, cashierName, cashierEmployeeId,
     paymentMethod, setPaymentMethod,
