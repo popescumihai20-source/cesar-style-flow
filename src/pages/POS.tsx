@@ -85,6 +85,26 @@ export default function POS() {
   } | null>(null);
   const [pinError, setPinError] = useState("");
 
+  // TEMPORAR: activează automat modul casier fără scanarea cardului
+  useEffect(() => {
+    if (!BYPASS_EMPLOYEE_CARD || mode === "casier") return;
+    let cancelled = false;
+    (async () => {
+      if (user?.employee_id) {
+        if (!cancelled) activateCashier(user.employee_id, user.name);
+        return;
+      }
+      const { data } = await supabase
+        .from("employees")
+        .select("id, name")
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data) activateCashier(data.id, data.name);
+    })();
+    return () => { cancelled = true; };
+  }, [BYPASS_EMPLOYEE_CARD, mode, user, activateCashier]);
+
   // POS location (which store this terminal sells from)
   const [posLocationCode, setPosLocationCode] = useState<PosLocationCode>(() => {
     const saved = typeof window !== "undefined" ? window.localStorage.getItem(POS_LOCATION_STORAGE_KEY) : null;
