@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseBarcode, isValidBarcode } from "@/lib/barcode-parser";
 import { useArticolDictionary } from "@/hooks/use-articol-dictionary";
 import { usePOS } from "@/hooks/use-pos";
+import { useAuth } from "@/hooks/use-auth";
 import { useInventoryLock } from "@/hooks/use-inventory-lock";
 import { Product } from "@/types/pos";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,9 @@ const POS_LOCATION_LABELS: Record<PosLocationCode, string> = {
 
 export default function POS() {
   const queryClient = useQueryClient();
+  // TEMPORAR: dezactivează autentificarea prin card de angajat la POS (pentru simulare vânzări)
+  const BYPASS_EMPLOYEE_CARD = true;
+  const { user } = useAuth();
   const {
     mode, cart, cashierName, cashierEmployeeId,
     paymentMethod, setPaymentMethod,
@@ -80,6 +84,26 @@ export default function POS() {
     saleInternalId?: string;
   } | null>(null);
   const [pinError, setPinError] = useState("");
+
+  // TEMPORAR: activează automat modul casier fără scanarea cardului
+  useEffect(() => {
+    if (!BYPASS_EMPLOYEE_CARD || mode === "casier") return;
+    let cancelled = false;
+    (async () => {
+      if (user?.employee_id) {
+        if (!cancelled) activateCashier(user.employee_id, user.name);
+        return;
+      }
+      const { data } = await supabase
+        .from("employees")
+        .select("id, name")
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data) activateCashier(data.id, data.name);
+    })();
+    return () => { cancelled = true; };
+  }, [BYPASS_EMPLOYEE_CARD, mode, user, activateCashier]);
 
   // POS location (which store this terminal sells from)
   const [posLocationCode, setPosLocationCode] = useState<PosLocationCode>(() => {
