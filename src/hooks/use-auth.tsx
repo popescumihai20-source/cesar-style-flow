@@ -25,12 +25,47 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = "cesars_employee_session";
 
+// TEMPORAR: dezactivează autentificarea cu card de angajat.
+// Setează pe false când cardurile fizice sunt gata pentru a reactiva login-ul.
+const BYPASS_CARD_LOGIN = true;
+const DEFAULT_ADMIN_CARD = "9000001"; // Popescu Vasile (admin)
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<EmployeeUser | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (BYPASS_CARD_LOGIN) {
+      (async () => {
+        try {
+          const { data: employee } = await supabase
+            .from("employees")
+            .select("id, name, role, employee_card_code, user_id")
+            .eq("employee_card_code", DEFAULT_ADMIN_CARD)
+            .eq("active", true)
+            .maybeSingle();
+
+          if (employee) {
+            const empUser: EmployeeUser = {
+              id: employee.user_id || employee.id,
+              email: `emp_${employee.employee_card_code}@cesars.internal`,
+              employee_id: employee.id,
+              name: employee.name,
+              card_code: employee.employee_card_code,
+            };
+            setUser(empUser);
+            setRoles(["admin"]);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ user: empUser, roles: ["admin"] }));
+          }
+        } catch {
+          // ignore
+        }
+        setLoading(false);
+      })();
+      return;
+    }
+
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
